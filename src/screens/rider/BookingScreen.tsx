@@ -9,7 +9,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RiderStackParamList } from '../../types';
@@ -97,30 +97,16 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Map */}
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        customMapStyle={DARK_MAP_STYLE}
-        initialRegion={{
-          latitude: 12.968,
-          longitude: 77.5918,
-          latitudeDelta: 0.028,
-          longitudeDelta: 0.028,
-        }}>
+      <DummyMap style={styles.map}>
         {/* Pickup pin */}
-        <Marker coordinate={{ latitude: 12.9716, longitude: 77.5946 }}>
-          <View style={styles.pickupPin}>
-            <View style={styles.pickupDot} />
-          </View>
-        </Marker>
+        <View style={[styles.pickupPin, { position: 'absolute', top: '30%', left: '42%' }]}>
+          <View style={styles.pickupDot} />
+        </View>
         {/* Drop pin */}
-        <Marker coordinate={{ latitude: 12.9580, longitude: 77.5850 }}>
-          <View style={styles.dropPin}>
-            <Text style={{ fontSize: 24 }}>📍</Text>
-          </View>
-        </Marker>
-      </MapView>
+        <View style={[styles.dropPin, { position: 'absolute', top: '62%', left: '28%' }]}>
+          <Text style={{ fontSize: 24 }}>📍</Text>
+        </View>
+      </DummyMap>
 
       {/* Back button */}
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>

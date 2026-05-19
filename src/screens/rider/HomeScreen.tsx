@@ -9,7 +9,7 @@ import {
   Dimensions,
   Animated,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RiderStackParamList } from '../../types';
@@ -78,20 +78,12 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map */}
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        initialRegion={INITIAL_REGION}
-        customMapStyle={DARK_MAP_STYLE}
-        showsUserLocation
-        showsMyLocationButton={false}>
-        <Marker coordinate={{ latitude: 12.9716, longitude: 77.5946 }}>
-          <View style={styles.myLocationPin}>
-            <View style={styles.myLocationDot} />
-          </View>
-        </Marker>
-      </MapView>
+      <DummyMap style={styles.map}>
+        {/* Pins rendered inside dummy map */}
+        <View style={[styles.myLocationPin, { position: 'absolute', top: '35%', left: '38%' }]}>
+          <View style={styles.myLocationDot} />
+        </View>
+      </DummyMap>
 
       {/* Top overlay */}
       <View style={styles.topOverlay}>

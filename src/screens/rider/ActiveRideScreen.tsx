@@ -8,7 +8,7 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
@@ -99,44 +99,24 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        customMapStyle={DARK_MAP_STYLE}
-        initialRegion={{
-          latitude: 12.9668,
-          longitude: 77.5898,
-          latitudeDelta: 0.025,
-          longitudeDelta: 0.025,
-        }}>
-        {/* Route */}
-        <Polyline
-          coordinates={ROUTE_COORDS}
-          strokeColor={Colors.primary}
-          strokeWidth={4}
-          lineDashPattern={[0]}
-        />
-        {/* Pickup */}
-        <Marker coordinate={ROUTE_COORDS[0]}>
-          <View style={styles.pickupPin}>
-            <Text style={{ fontSize: 20 }}>📍</Text>
-          </View>
-        </Marker>
-        {/* Captain */}
-        <Marker coordinate={ROUTE_COORDS[2]}>
-          <Animated.View style={[styles.captainPin, { transform: [{ scale: pulseAnim }] }]}>
-            <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.captainPinGrad}>
-              <Text style={{ fontSize: 16 }}>🏍️</Text>
-            </LinearGradient>
-          </Animated.View>
-        </Marker>
-        {/* Dropoff */}
-        <Marker coordinate={ROUTE_COORDS[4]}>
-          <View style={styles.dropPin}>
-            <Text style={{ fontSize: 20 }}>🏁</Text>
-          </View>
-        </Marker>
-      </MapView>
+      <DummyMap style={styles.map}>
+        {/* Pickup marker */}
+        <View style={[styles.pickupPin, { position: 'absolute', top: '60%', left: '20%' }]}>
+          <Text style={{ fontSize: 22 }}>📍</Text>
+        </View>
+        {/* Captain marker */}
+        <Animated.View style={[styles.captainPin, { position: 'absolute', top: '38%', left: '44%', transform: [{ scale: pulseAnim }] }]}>
+          <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.captainPinGrad}>
+            <Text style={{ fontSize: 16 }}>🏍️</Text>
+          </LinearGradient>
+        </Animated.View>
+        {/* Drop marker */}
+        <View style={[styles.dropPin, { position: 'absolute', top: '20%', left: '68%' }]}>
+          <Text style={{ fontSize: 22 }}>🏁</Text>
+        </View>
+        {/* Fake route line */}
+        <View style={styles.fakeRoute} />
+      </DummyMap>
 
       {/* Status Bar */}
       <View style={styles.statusBar}>
@@ -322,4 +302,15 @@ const styles = StyleSheet.create({
   completeBtn: { marginTop: Spacing.md, borderRadius: BorderRadius.lg, overflow: 'hidden' },
   completeBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center', justifyContent: 'center' },
   completeBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
+  fakeRoute: {
+    position: 'absolute',
+    top: '22%',
+    left: '23%',
+    width: '55%',
+    height: 3,
+    backgroundColor: Colors.primary,
+    opacity: 0.6,
+    borderRadius: 2,
+    transform: [{ rotate: '30deg' }],
+  },
 });

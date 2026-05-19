@@ -19,9 +19,9 @@ const MOCK_RIDER: User = {
   id: 'usr_001',
   name: 'Arjun Sharma',
   phone: '+91 98765 43210',
-  role: 'rider',
-  rating: 4.8,
-  totalRides: 142,
+  role: 'captain',   // 👈 change to 'rider' to switch back
+  rating: 4.9,
+  totalRides: 2840,
 };
 
 export const useAuthStore = create<AuthState>(set => ({
