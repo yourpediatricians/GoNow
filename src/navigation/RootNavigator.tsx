@@ -1,0 +1,202 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+
+// Screens - Auth
+import { SplashScreen } from '../screens/auth/SplashScreen';
+import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
+import { PhoneEntryScreen } from '../screens/auth/PhoneEntryScreen';
+import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
+
+// Screens - Rider
+import { RiderHomeScreen } from '../screens/rider/HomeScreen';
+import { RideHistoryScreen } from '../screens/rider/RideHistoryScreen';
+import { ProfileScreen } from '../screens/rider/ProfileScreen';
+import { ActiveRideScreen } from '../screens/rider/ActiveRideScreen';
+
+// Screens - Captain
+import { CaptainDashboardScreen } from '../screens/captain/DashboardScreen';
+
+// Store
+import { useAuthStore } from '../store/authStore';
+import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../constants/theme';
+
+// ─── Auth Stack ────────────────────────────────────────────────────────────────
+const AuthStack = createNativeStackNavigator();
+const AuthNavigator = () => (
+  <AuthStack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+    <AuthStack.Screen name="Splash" component={SplashScreen} />
+    <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+    <AuthStack.Screen name="PhoneEntry" component={PhoneEntryScreen} />
+    <AuthStack.Screen name="OTPVerify" component={OTPVerifyScreen} />
+    <AuthStack.Screen name="RoleSelect" component={WelcomeScreen} />
+    <AuthStack.Screen name="ProfileSetup" component={WelcomeScreen} />
+  </AuthStack.Navigator>
+);
+
+// ─── Custom Tab Bar ────────────────────────────────────────────────────────────
+const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  const tabs = [
+    { icon: '🏠', label: 'Home' },
+    { icon: '📋', label: 'History' },
+    { icon: '👤', label: 'Profile' },
+  ];
+
+  return (
+    <View style={tabStyles.container}>
+      {state.routes.map((route: any, index: number) => {
+        const isFocused = state.index === index;
+        const tab = tabs[index];
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={() => navigation.navigate(route.name)}
+            style={tabStyles.tab}
+            activeOpacity={0.7}>
+            <View style={[tabStyles.iconWrapper, isFocused && tabStyles.activeIconWrapper]}>
+              <Text style={[tabStyles.icon, isFocused && tabStyles.activeIcon]}>
+                {tab.icon}
+              </Text>
+            </View>
+            <Text style={[tabStyles.label, isFocused && tabStyles.activeLabel]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+// ─── Rider Tab Navigator ───────────────────────────────────────────────────────
+const RiderTab = createBottomTabNavigator();
+const RiderTabNavigator = () => (
+  <RiderTab.Navigator
+    tabBar={props => <CustomTabBar {...props} />}
+    screenOptions={{ headerShown: false }}>
+    <RiderTab.Screen name="Home" component={RiderHomeScreen} />
+    <RiderTab.Screen name="History" component={RideHistoryScreen} />
+    <RiderTab.Screen name="Profile" component={ProfileScreen} />
+  </RiderTab.Navigator>
+);
+
+// ─── Rider Stack ───────────────────────────────────────────────────────────────
+const RiderStack = createNativeStackNavigator();
+const RiderNavigator = () => (
+  <RiderStack.Navigator screenOptions={{ headerShown: false }}>
+    <RiderStack.Screen name="RiderTabs" component={RiderTabNavigator} />
+    <RiderStack.Screen
+      name="ActiveRide"
+      component={ActiveRideScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
+  </RiderStack.Navigator>
+);
+
+// ─── Captain Tab Navigator ─────────────────────────────────────────────────────
+const CaptainTab = createBottomTabNavigator();
+
+const CaptainTabBar = ({ state, descriptors, navigation }: any) => {
+  const tabs = [
+    { icon: '📊', label: 'Dashboard' },
+    { icon: '💰', label: 'Earnings' },
+    { icon: '👤', label: 'Profile' },
+  ];
+
+  return (
+    <View style={tabStyles.container}>
+      {state.routes.map((route: any, index: number) => {
+        const isFocused = state.index === index;
+        const tab = tabs[index];
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={() => navigation.navigate(route.name)}
+            style={tabStyles.tab}
+            activeOpacity={0.7}>
+            <View style={[tabStyles.iconWrapper, isFocused && tabStyles.activeIconWrapper]}>
+              <Text style={[tabStyles.icon, isFocused && tabStyles.activeIcon]}>
+                {tab.icon}
+              </Text>
+            </View>
+            <Text style={[tabStyles.label, isFocused && tabStyles.activeLabel]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const CaptainTabNavigator = () => (
+  <CaptainTab.Navigator
+    tabBar={props => <CaptainTabBar {...props} />}
+    screenOptions={{ headerShown: false }}>
+    <CaptainTab.Screen name="Dashboard" component={CaptainDashboardScreen} />
+    <CaptainTab.Screen name="Earnings" component={CaptainDashboardScreen} />
+    <CaptainTab.Screen name="Profile" component={ProfileScreen} />
+  </CaptainTab.Navigator>
+);
+
+// ─── Root Navigator ────────────────────────────────────────────────────────────
+const RootStack = createNativeStackNavigator();
+
+export const RootNavigator = () => {
+  const { isAuthenticated, user } = useAuthStore();
+
+  return (
+    <NavigationContainer>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        {!isAuthenticated ? (
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        ) : user?.role === 'captain' ? (
+          <RootStack.Screen name="Captain" component={CaptainTabNavigator} />
+        ) : (
+          <RootStack.Screen name="Rider" component={RiderNavigator} />
+        )}
+      </RootStack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+const tabStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+    paddingBottom: 24,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  iconWrapper: {
+    width: 44,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeIconWrapper: {
+    backgroundColor: 'rgba(255,90,31,0.12)',
+  },
+  icon: { fontSize: 20, opacity: 0.5 },
+  activeIcon: { opacity: 1 },
+  label: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.medium,
+  },
+  activeLabel: {
+    color: Colors.primary,
+    fontWeight: FontWeight.bold,
+  },
+});
