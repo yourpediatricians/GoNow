@@ -128,6 +128,14 @@ export type RiderTabParamList = {
   Profile: undefined;
 };
 
+export type RiderTabParamList = {
+  Home: undefined;
+  History: undefined;
+  Wallet: undefined;
+  Notifications: undefined;
+  Profile: undefined;
+};
+
 export type RiderStackParamList = {
   RiderTabs: undefined;
   Booking: { pickup: Location; dropoff: Location };

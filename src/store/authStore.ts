@@ -14,11 +14,21 @@ interface AuthState {
   updateProfile: (updates: Partial<User>) => void;
 }
 
+// ── MOCK USER: bypasses auth for development ──────────────────────────────────
+const MOCK_RIDER: User = {
+  id: 'usr_001',
+  name: 'Arjun Sharma',
+  phone: '+91 98765 43210',
+  role: 'rider',
+  rating: 4.8,
+  totalRides: 142,
+};
+
 export const useAuthStore = create<AuthState>(set => ({
-  user: null,
-  isAuthenticated: false,
+  user: MOCK_RIDER,
+  isAuthenticated: true,
   isLoading: false,
-  token: null,
+  token: 'mock_token_dev',
 
   setUser: user => set({ user, isAuthenticated: true }),
   setToken: token => set({ token }),

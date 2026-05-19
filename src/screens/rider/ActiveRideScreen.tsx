@@ -37,11 +37,29 @@ const ROUTE_COORDS = [
   { latitude: 12.9716, longitude: 77.5946 },
 ];
 
-export const ActiveRideScreen: React.FC = () => {
+export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
   const [status, setStatus] = useState<'arriving' | 'in_progress' | 'completed'>('arriving');
   const [eta, setEta] = useState(MOCK_CAPTAIN.eta);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(200)).current;
+
+  const handleComplete = () => {
+    navigation.navigate('RideComplete', {
+      ride: {
+        id: 'ride_001',
+        pickup: { latitude: 12.962, longitude: 77.585, address: 'Koramangala 5th Block' },
+        dropoff: { latitude: 12.9716, longitude: 77.5946, address: 'MG Road Metro Station' },
+        rideType: 'bike',
+        fare: 85,
+        distance: 4.2,
+        duration: 14,
+        status: 'completed',
+        date: new Date().toISOString(),
+        captain: { ...MOCK_CAPTAIN, id: 'cap_001', currentLocation: ROUTE_COORDS[2], isOnline: true },
+        rating: undefined,
+      },
+    });
+  };
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -187,6 +205,15 @@ export const ActiveRideScreen: React.FC = () => {
         <TouchableOpacity style={styles.sosBtn}>
           <Text style={styles.sosBtnText}>🆘 Emergency SOS</Text>
         </TouchableOpacity>
+
+        {/* Complete ride (shown in progress) */}
+        {status === 'in_progress' && (
+          <TouchableOpacity style={styles.completeBtn} onPress={handleComplete} activeOpacity={0.9}>
+            <LinearGradient colors={[Colors.success, '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.completeBtnGrad}>
+              <Text style={styles.completeBtnText}>✓ I've Arrived — End Ride</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </Animated.View>
     </View>
   );
@@ -292,4 +319,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.error,
   },
   sosBtnText: { color: Colors.error, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  completeBtn: { marginTop: Spacing.md, borderRadius: BorderRadius.lg, overflow: 'hidden' },
+  completeBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  completeBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
 });

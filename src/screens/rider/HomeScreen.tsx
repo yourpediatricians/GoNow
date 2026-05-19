@@ -17,6 +17,8 @@ import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
+type Props = NativeStackScreenProps<RiderStackParamList, 'RiderTabs'> & { navigation: any };
+
 const { width, height } = Dimensions.get('window');
 
 const DARK_MAP_STYLE = [
@@ -43,12 +45,19 @@ const RIDE_TYPES = [
   { id: 'cab', icon: '🚗', label: 'Cab', price: '₹120', eta: '7 min' },
 ];
 
-export const RiderHomeScreen: React.FC = () => {
+export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { user } = useAuthStore();
   const { setPickup, setDropoff } = useRideStore();
   const [selectedRide, setSelectedRide] = useState('bike');
   const mapRef = useRef<MapView>(null);
   const bottomSheetY = useRef(new Animated.Value(0)).current;
+
+  const handleBook = () => {
+    navigation.navigate('Booking', {
+      pickup: { latitude: 12.9716, longitude: 77.5946, address: 'Koramangala 5th Block, Bengaluru', name: 'Koramangala' },
+      dropoff: { latitude: 12.958, longitude: 77.585, address: 'MG Road Metro Station, Bengaluru', name: 'MG Road' },
+    });
+  };
 
   const INITIAL_REGION = {
     latitude: 12.9716,
@@ -113,7 +122,7 @@ export const RiderHomeScreen: React.FC = () => {
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
         {/* Where to? */}
-        <TouchableOpacity style={styles.searchBar} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.searchBar} activeOpacity={0.85} onPress={handleBook}>
           <View style={styles.searchDot} />
           <Text style={styles.searchPlaceholder}>Where do you want to go?</Text>
           <View style={styles.searchArrow}>
@@ -169,7 +178,7 @@ export const RiderHomeScreen: React.FC = () => {
         </View>
 
         {/* Book button */}
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9} onPress={handleBook}>
           <LinearGradient
             colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
             start={{ x: 0, y: 0 }}
