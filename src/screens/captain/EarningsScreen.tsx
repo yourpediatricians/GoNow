@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Dimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { useCaptainStore } from '../../store/captainStore';
 
 const { width } = Dimensions.get('window');
 
@@ -40,8 +41,21 @@ const RECENT_EARNINGS = [
 
 export const CaptainEarningsScreen: React.FC = () => {
   const [period, setPeriod] = useState<Period>('week');
-  const stats = EARNINGS_BY_PERIOD[period];
-  const maxAmount = Math.max(...WEEKLY_DATA.map(d => d.amount));
+  const { weeklyEarnings, todayEarnings, todayRides, totalEarnings, acceptanceRate, fetchEarnings } = useCaptainStore();
+
+  useEffect(() => {
+    fetchEarnings();
+  }, []);
+
+  const chartData = weeklyEarnings.length > 0 ? weeklyEarnings : WEEKLY_DATA;
+  const maxAmount = Math.max(...chartData.map(d => d.amount), 1);
+
+  const stats = period === 'today'
+    ? { total: todayEarnings, rides: todayRides, hours: '-', avg: todayRides > 0 ? Math.round(todayEarnings / todayRides) : 0 }
+    : period === 'week'
+    ? { total: weeklyEarnings.reduce((s, d) => s + d.amount, 0), rides: weeklyEarnings.reduce((s, d) => s + d.rides, 0), hours: '-', avg: 0 }
+    : { total: totalEarnings, rides: 0, hours: '-', avg: 0 };
+
 
   return (
     <View style={s.container}>
@@ -94,7 +108,7 @@ export const CaptainEarningsScreen: React.FC = () => {
         <View style={s.section}>
           <Text style={s.sectionTitle}>Weekly Breakdown</Text>
           <View style={s.chart}>
-            {WEEKLY_DATA.map((d, i) => {
+            {chartData.map((d, i) => {
               const isToday = i === 6;
               return (
                 <View key={i} style={s.barWrap}>

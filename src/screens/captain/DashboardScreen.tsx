@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,18 @@ import {
   StatusBar,
   Switch,
   Dimensions,
+  Alert,
+  TextInput,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useCaptainStore } from '../../store/captainStore';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { getSocket, SOCKET_EVENTS, emitLocationUpdate } from '../../services/socket.service';
+import Geolocation from '@react-native-community/geolocation';
+import { RideRequest } from '../../types';
+import { IncomingRideScreen } from './IncomingRideScreen';
+import { rideService } from '../../services/ride.service';
 
 const { width } = Dimensions.get('window');
 
@@ -23,15 +30,330 @@ const RECENT_RIDES = [
 ];
 
 export const CaptainDashboardScreen: React.FC = () => {
-  const { isOnline, setOnline, todayEarnings, todayRides, weeklyEarnings } = useCaptainStore();
+  const {
+    isOnline, toggleOnline, fetchEarnings,
+    todayEarnings, todayRides, weeklyEarnings,
+    incomingRequest, setIncomingRequest, isLoading,
+    activeRideId, setActiveRideId,
+  } = useCaptainStore();
   const { user } = useAuthStore();
-  const [incomingRide, setIncomingRide] = useState(false);
 
-  const maxEarning = Math.max(...weeklyEarnings.map(d => d.amount));
+  const [activeRideDetails, setActiveRideDetails] = useState<any>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [isRideActionLoading, setIsRideActionLoading] = useState(false);
+
+  const maxEarning = weeklyEarnings.length
+    ? Math.max(...weeklyEarnings.map(d => d.amount), 1)
+    : 1;
+
+  // Fetch active ride details
+  const fetchActiveRide = async () => {
+    if (!activeRideId) return;
+    try {
+      const res = await rideService.getRideById(activeRideId);
+      if (res.success && res.data) {
+        setActiveRideDetails(res.data.ride);
+      }
+    } catch (err) {
+      console.error('Error fetching active ride details:', err);
+    }
+  };
+
+  // Fetch earnings on mount
+  useEffect(() => {
+    fetchEarnings();
+  }, []);
+
+  // Fetch active ride details when activeRideId changes
+  useEffect(() => {
+    if (activeRideId) {
+      fetchActiveRide();
+    } else {
+      setActiveRideDetails(null);
+      setOtpCode('');
+    }
+  }, [activeRideId]);
+
+  // Listen for incoming ride requests and cancellation via Socket.io
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const rideReqHandler = (data: RideRequest) => {
+      setIncomingRequest(data);
+    };
+
+    const rideCancelHandler = (data: any) => {
+      if (activeRideId && data.rideId === activeRideId) {
+        Alert.alert('Ride Cancelled', data.reason || 'The rider has cancelled this ride.');
+        setActiveRideId(null);
+        setActiveRideDetails(null);
+      }
+    };
+
+    socket.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
+    socket.on(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+
+    return () => {
+      socket.off(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
+      socket.off(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+    };
+  }, [activeRideId]);
+
+  // Periodic location updates when captain is online
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const interval = setInterval(() => {
+      Geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          // Update database location
+          useCaptainStore.getState().updateLocationApi(latitude, longitude);
+
+          // Emit location to active rider if applicable
+          if (activeRideId && activeRideDetails?.rider?._id) {
+            emitLocationUpdate(
+              latitude,
+              longitude,
+              activeRideId,
+              activeRideDetails.rider._id
+            );
+          }
+        },
+        (error) => console.log('Location update error:', error),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }, 10000); // every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [isOnline, activeRideId, activeRideDetails]);
+
+  const handleToggleOnline = useCallback(() => {
+    if (isOnline) {
+      toggleOnline(false).catch(err =>
+        Alert.alert('Error', err?.response?.data?.message || 'Failed to go offline')
+      );
+    } else {
+      Geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          toggleOnline(true, latitude, longitude).catch(err =>
+            Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
+          );
+        },
+        (error) => {
+          Alert.alert('Location Required', 'Please enable location to go online.');
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, [isOnline]);
+
+  const handleVerifyOtp = async () => {
+    if (!activeRideId || otpCode.length < 4 || isRideActionLoading) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await rideService.verifyRideOtp(activeRideId, otpCode);
+      if (res.success) {
+        Alert.alert('Ride Started', 'OTP verified! Start driving to drop-off.');
+        fetchActiveRide();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Incorrect OTP. Please check with rider.');
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleCompleteRide = async () => {
+    if (!activeRideId || isRideActionLoading) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await rideService.completeRide(activeRideId);
+      if (res.success) {
+        Alert.alert('Ride Completed', `Earning of ₹${res.data?.fare || activeRideDetails?.fare?.estimated} added!`);
+        setActiveRideId(null);
+        setActiveRideDetails(null);
+        fetchEarnings();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to complete ride');
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleCancelActiveRide = () => {
+    Alert.alert(
+      'Cancel Active Ride',
+      'Are you sure you want to cancel this ride?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            if (!activeRideId) return;
+            setIsRideActionLoading(true);
+            try {
+              await rideService.cancelRide(activeRideId, 'Cancelled by captain');
+              setActiveRideId(null);
+              setActiveRideDetails(null);
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message || 'Failed to cancel ride');
+            } finally {
+              setIsRideActionLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderActiveRidePanel = () => {
+    if (!activeRideDetails) return null;
+
+    const rider = activeRideDetails.rider || {};
+    const status = activeRideDetails.status;
+    const isArriving = status === 'accepted';
+    const isProgress = status === 'otp_verified' || status === 'in_progress';
+    const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
+
+    return (
+      <View style={styles.activeOverlay}>
+        <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.85)" />
+        <View style={styles.activeSheet}>
+          <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.activeSheetHeader}>
+            <Text style={styles.activeSheetTitle}>
+              {isArriving ? '🏍️ Head to Pickup' : '🚀 Trip in Progress'}
+            </Text>
+            <Text style={styles.activeSheetSubtitle}>
+              {isArriving ? 'Arrive at customer location and verify OTP' : 'Driving customer to destination'}
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.riderCard}>
+            <View style={styles.riderAvatar}>
+              <Text style={styles.riderAvatarText}>{rider.name?.charAt(0) || 'U'}</Text>
+            </View>
+            <View style={styles.riderInfo}>
+              <Text style={styles.riderName}>{rider.name || 'Rider'}</Text>
+              <Text style={styles.riderMeta}>⭐ {rider.rating || 5.0} · {rideIcons[activeRideDetails.rideType] || '🏍️'}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.activeCallBtn}
+              onPress={() => Alert.alert('Calling Rider', `Dialing: ${rider.phone}`)}>
+              <Text style={{ fontSize: 18 }}>📞</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.activeRouteCard}>
+            <View style={styles.routeRow}>
+              <View style={styles.dotPickup} />
+              <View style={styles.routeTexts}>
+                <Text style={styles.routeLabel}>Pickup Location</Text>
+                <Text style={styles.routeAddr} numberOfLines={1}>{activeRideDetails.pickup?.address}</Text>
+              </View>
+            </View>
+            <View style={styles.routeLine} />
+            <View style={styles.routeRow}>
+              <View style={styles.dotDrop} />
+              <View style={styles.routeTexts}>
+                <Text style={styles.routeLabel}>Drop-off Location</Text>
+                <Text style={styles.routeAddr} numberOfLines={1}>{activeRideDetails.dropoff?.address}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.activeMetricsRow}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>Est. Distance</Text>
+              <Text style={styles.metricVal}>{activeRideDetails.distance} km</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>Trip Fare</Text>
+              <Text style={styles.metricVal}>₹{activeRideDetails.fare?.estimated}</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>Payment</Text>
+              <Text style={styles.metricVal}>{activeRideDetails.paymentMethod?.toUpperCase()}</Text>
+            </View>
+          </View>
+
+          {isArriving && (
+            <View style={styles.otpInputSection}>
+              <Text style={styles.otpInputLabel}>Ask customer for OTP to start ride</Text>
+              <View style={styles.otpInputRow}>
+                <TextInput
+                  style={styles.otpInput}
+                  placeholder="Enter 4-Digit OTP"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  value={otpCode}
+                  onChangeText={setOtpCode}
+                />
+                <TouchableOpacity
+                  style={[styles.verifyButton, otpCode.length < 4 && styles.verifyButtonDisabled]}
+                  onPress={handleVerifyOtp}
+                  disabled={otpCode.length < 4 || isRideActionLoading}>
+                  <LinearGradient
+                    colors={otpCode.length < 4 ? [Colors.surfaceElevated, Colors.surfaceBorder] : [Colors.success, '#16A34A']}
+                    style={styles.verifyButtonGrad}>
+                    <Text style={[styles.verifyButtonText, otpCode.length < 4 && { color: Colors.textMuted }]}>
+                      {isRideActionLoading ? 'Starting...' : 'Verify & Start'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {isProgress && (
+            <TouchableOpacity
+              style={styles.completeRideBtn}
+              onPress={handleCompleteRide}
+              disabled={isRideActionLoading}>
+              <LinearGradient
+                colors={[Colors.success, '#16A34A']}
+                style={styles.completeRideBtnGrad}>
+                <Text style={styles.completeRideBtnText}>
+                  {isRideActionLoading ? 'Completing Ride...' : '✓ Complete Ride'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {isArriving && (
+            <TouchableOpacity
+              style={styles.cancelActiveBtn}
+              onPress={handleCancelActiveRide}
+              disabled={isRideActionLoading}>
+              <Text style={styles.cancelActiveText}>Cancel Ride</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+
+      {/* Active Ride Workflow Panel overlay */}
+      {renderActiveRidePanel()}
+
+      {/* Incoming ride request overlay */}
+      {incomingRequest && !activeRideId && (
+        <IncomingRideScreen
+          onAccept={() => {}}
+          onReject={() => setIncomingRequest(null)}
+        />
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -49,7 +371,8 @@ export const CaptainDashboardScreen: React.FC = () => {
               </Text>
               <Switch
                 value={isOnline}
-                onValueChange={setOnline}
+                onValueChange={handleToggleOnline}
+                disabled={isLoading}
                 trackColor={{ false: Colors.surfaceBorder, true: 'rgba(255,90,31,0.3)' }}
                 thumbColor={isOnline ? Colors.primary : Colors.textMuted}
               />
@@ -261,4 +584,43 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 24, marginBottom: Spacing.sm },
   actionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   actionSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+
+  // Active Ride styles
+  activeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end', zIndex: 1000 },
+  activeSheet: { backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, overflow: 'hidden' },
+  activeSheetHeader: { padding: Spacing.xl, alignItems: 'center' },
+  activeSheetTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.white, marginBottom: 4 },
+  activeSheetSubtitle: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
+  riderCard: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: Spacing.md },
+  riderAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  riderAvatarText: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.white },
+  riderInfo: { flex: 1 },
+  riderName: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  riderMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  activeCallBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  activeRouteCard: { padding: Spacing.xl, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: Spacing.sm },
+  dotPickup: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
+  dotDrop: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.error },
+  routeLine: { width: 2, height: 16, backgroundColor: Colors.surfaceBorder, marginLeft: 4, marginVertical: 2 },
+  routeTexts: { flex: 1 },
+  routeLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
+  routeAddr: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textPrimary },
+  activeMetricsRow: { flexDirection: 'row', padding: Spacing.xl, alignItems: 'center' },
+  metricBox: { flex: 1, alignItems: 'center' },
+  metricLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 4 },
+  metricVal: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  metricDivider: { width: 1, height: 28, backgroundColor: Colors.surfaceBorder },
+  otpInputSection: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
+  otpInputLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.sm, textAlign: 'center', fontWeight: FontWeight.semiBold },
+  otpInputRow: { flexDirection: 'row', gap: Spacing.md },
+  otpInput: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.lg, borderWidth: 1.5, borderColor: Colors.surfaceBorder, color: Colors.textPrimary, paddingHorizontal: Spacing.md, fontSize: FontSize.lg, fontWeight: FontWeight.bold, textAlign: 'center', letterSpacing: 8, height: 48 },
+  verifyButton: { flex: 1, borderRadius: BorderRadius.lg, overflow: 'hidden' },
+  verifyButtonDisabled: { opacity: 0.5 },
+  verifyButtonGrad: { height: 48, alignItems: 'center', justifyContent: 'center' },
+  verifyButtonText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
+  completeRideBtn: { marginHorizontal: Spacing.xl, marginBottom: Spacing.md, borderRadius: BorderRadius.lg, overflow: 'hidden' },
+  completeRideBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  completeRideBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.lg },
+  cancelActiveBtn: { marginHorizontal: Spacing.xl, alignItems: 'center', paddingVertical: Spacing.md },
+  cancelActiveText: { color: Colors.error, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
 });

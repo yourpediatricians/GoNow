@@ -8,21 +8,25 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../constants/theme';
+import { useAuthStore } from '../../store/authStore';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneEntry'>;
 
 const COUNTRY_CODE = '+91';
 
-export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
+export const PhoneEntryScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { role } = route.params;
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { sendOtp } = useAuthStore();
 
   const handleSendOTP = async () => {
     if (phone.length !== 10) {
@@ -32,12 +36,25 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const fullPhone = COUNTRY_CODE + phone;
+      const result = await sendOtp(fullPhone, role);
+
+      // In dev mode, backend returns the OTP — show it as a hint
+      if (result?.devOtp) {
+        Alert.alert('Dev Mode OTP', `Your OTP is: ${result.devOtp}`, [{ text: 'OK' }]);
+      }
+
+      navigation.navigate('OTPVerify', { phone: fullPhone, role });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Failed to send OTP. Check your connection.';
+      setError(msg);
+    } finally {
       setLoading(false);
-      navigation.navigate('OTPVerify', { phone: COUNTRY_CODE + phone });
-    }, 1200);
+    }
   };
+
+  const roleLabel = role === 'rider' ? '🚗 Rider' : '🏍️ Captain';
 
   return (
     <KeyboardAvoidingView
@@ -55,6 +72,11 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
           style={styles.backBtn}>
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
+
+        {/* Role badge */}
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleBadgeText}>{roleLabel}</Text>
+        </View>
 
         {/* Header */}
         <View style={styles.header}>
@@ -109,7 +131,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
         />
 
         <Text style={styles.note}>
-          Standard SMS rates may apply. OTP is valid for 5 minutes.
+          Standard SMS rates may apply. OTP is valid for 10 minutes.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -126,9 +148,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing['2xl'],
+    marginBottom: Spacing.md,
   },
   backIcon: { fontSize: 20, color: Colors.textPrimary },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,90,31,0.12)',
+    borderRadius: BorderRadius.full,
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,90,31,0.3)',
+    marginBottom: Spacing.xl,
+  },
+  roleBadgeText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semiBold },
   header: { marginBottom: Spacing['2xl'] },
   iconBox: {
     width: 64,

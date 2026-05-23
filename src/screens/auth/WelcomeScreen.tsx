@@ -96,13 +96,13 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
 
         <Button
           title="Book a Ride"
-          onPress={() => navigation.navigate('PhoneEntry')}
+          onPress={() => navigation.navigate('PhoneEntry', { role: 'rider' })}
           style={styles.riderBtn}
         />
 
         <Button
           title="Drive & Earn as Captain"
-          onPress={() => navigation.navigate('RoleSelect')}
+          onPress={() => navigation.navigate('PhoneEntry', { role: 'captain' })}
           variant="outline"
           style={styles.captainBtn}
         />

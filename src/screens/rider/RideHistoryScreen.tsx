@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { useRideStore } from '../../store/rideStore';
 
 const MOCK_HISTORY = [
   {
@@ -87,12 +89,19 @@ type Filter = 'all' | 'completed' | 'cancelled';
 
 export const RideHistoryScreen: React.FC = () => {
   const [filter, setFilter] = useState<Filter>('all');
+  const { rideHistory, fetchRideHistory, isLoading } = useRideStore();
 
-  const filtered = MOCK_HISTORY.filter(
+  useEffect(() => {
+    fetchRideHistory();
+  }, []);
+
+  const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
+
+  const filtered = rideHistory.filter(
     r => filter === 'all' || r.status === filter,
   );
 
-  const totalSpent = MOCK_HISTORY.filter(r => r.status === 'completed')
+  const totalSpent = rideHistory.filter(r => r.status === 'completed')
     .reduce((sum, r) => sum + r.fare, 0);
 
   const renderItem = ({ item }: { item: typeof MOCK_HISTORY[0] }) => (

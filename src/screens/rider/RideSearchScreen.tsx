@@ -5,24 +5,27 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RiderStackParamList } from '../../types';
+import { RiderStackParamList, CaptainInfo } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { getSocket, SOCKET_EVENTS } from '../../services/socket.service';
+import { useRideStore } from '../../store/rideStore';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RideSearch'>;
 const { width } = Dimensions.get('window');
-const MOCK_CAPTAIN = {
-  name: 'Rajesh Kumar', avatar: 'R', rating: 4.9, totalRides: 2840,
-  vehicle: { make: 'Honda', model: 'Activa 6G', color: 'Black', plateNumber: 'KA 05 AB 1234' },
-};
 
-export const RideSearchScreen: React.FC<Props> = ({ navigation }) => {
+export const RideSearchScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { rideId } = route.params;
   const [phase, setPhase] = useState<'searching' | 'matched'>('searching');
   const [dotsCount, setDotsCount] = useState(1);
+  const [matchedCaptain, setMatchedCaptain] = useState<CaptainInfo | null>(null);
+  const [rideOtp, setRideOtp] = useState<string>('');
   const pulse1 = useRef(new Animated.Value(0)).current;
   const pulse2 = useRef(new Animated.Value(0)).current;
   const pulse3 = useRef(new Animated.Value(0)).current;
   const matchScale = useRef(new Animated.Value(0)).current;
   const matchOpacity = useRef(new Animated.Value(0)).current;
+
+  const { setCaptain, setRideStatus, availableCaptains, estimatedDistance, estimatedDuration, cancelRide } = useRideStore();
 
   useEffect(() => {
     const dotTimer = setInterval(() => setDotsCount(d => (d % 3) + 1), 500);
@@ -33,16 +36,49 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation }) => {
         Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
       ])).start();
     animPulse(pulse1, 0); animPulse(pulse2, 600); animPulse(pulse3, 1200);
-    const matchTimer = setTimeout(() => {
+
+    // ── Socket: listen for captain acceptance ─────────────────────────────────
+    const socket = getSocket();
+    if (socket) {
+      socket.on(SOCKET_EVENTS.RIDE_ACCEPTED, (data: any) => {
+        clearInterval(dotTimer);
+        const captain: CaptainInfo = {
+          id: data.captain.id,
+          name: data.captain.name,
+          phone: data.captain.phone,
+          rating: data.captain.rating,
+          totalRides: 0,
+          vehicle: data.captain.vehicle,
+          distanceFromPickup: data.captain.distanceFromPickup,
+        };
+        setMatchedCaptain(captain);
+        setCaptain(captain);
+        setRideOtp(data.otp);
+        setRideStatus('matched');
+        setPhase('matched');
+        Animated.parallel([
+          Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
+          Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+        ]).start();
+      });
+
+      socket.on(SOCKET_EVENTS.RIDE_CANCELLED, () => {
+        clearInterval(dotTimer);
+        navigation.goBack();
+      });
+    }
+
+    return () => {
       clearInterval(dotTimer);
-      setPhase('matched');
-      Animated.parallel([
-        Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-        Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-      ]).start();
-    }, 3000);
-    return () => { clearInterval(dotTimer); clearTimeout(matchTimer); };
+      socket?.off(SOCKET_EVENTS.RIDE_ACCEPTED);
+      socket?.off(SOCKET_EVENTS.RIDE_CANCELLED);
+    };
   }, []);
+
+  const handleCancel = async () => {
+    await cancelRide('Cancelled by rider').catch(() => {});
+    navigation.goBack();
+  };
 
   const pulseStyle = (anim: Animated.Value) => ({
     transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 2.2] }) }],
@@ -69,41 +105,64 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={{ fontSize: 32 }}>🔍</Text>
         </LinearGradient>
       </View>
+
       {phase === 'searching' && (
         <View style={s.statsRow}>
-          {[{ l: 'Captains nearby', v: '12' }, { l: 'Est. wait', v: '2-3 min' }, { l: 'Distance', v: '4.2 km' }]
-            .map((s2, i) => (
-              <View key={i} style={s.statItem}>
-                <Text style={s.statValue}>{s2.v}</Text>
-                <Text style={s.statLabel}>{s2.l}</Text>
-              </View>
-            ))}
+          {[
+            { l: 'Captains nearby', v: availableCaptains > 0 ? `${availableCaptains}` : '...' },
+            { l: 'Distance', v: estimatedDistance > 0 ? `${estimatedDistance} km` : '...' },
+            { l: 'Est. wait', v: estimatedDuration > 0 ? `~${Math.round(estimatedDuration / 3)} min` : '...' },
+          ].map((s2, i) => (
+            <View key={i} style={s.statItem}>
+              <Text style={s.statValue}>{s2.v}</Text>
+              <Text style={s.statLabel}>{s2.l}</Text>
+            </View>
+          ))}
         </View>
       )}
-      {phase === 'matched' && (
+
+      {phase === 'matched' && matchedCaptain && (
         <Animated.View style={[s.matchCard, { opacity: matchOpacity, transform: [{ scale: matchScale }] }]}>
           <View style={s.captainRow}>
-            <View style={s.avatar}><Text style={s.avatarText}>{MOCK_CAPTAIN.avatar}</Text></View>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{matchedCaptain.name?.charAt(0) || 'C'}</Text>
+            </View>
             <View style={s.captainInfo}>
-              <Text style={s.captainName}>{MOCK_CAPTAIN.name}</Text>
-              <Text style={s.captainMeta}>⭐ {MOCK_CAPTAIN.rating} · {MOCK_CAPTAIN.totalRides} rides</Text>
-              <Text style={s.vehicleText}>{MOCK_CAPTAIN.vehicle.color} {MOCK_CAPTAIN.vehicle.make} {MOCK_CAPTAIN.vehicle.model}</Text>
+              <Text style={s.captainName}>{matchedCaptain.name}</Text>
+              <Text style={s.captainMeta}>⭐ {matchedCaptain.rating}</Text>
+              <Text style={s.vehicleText}>
+                {matchedCaptain.vehicle?.color} {matchedCaptain.vehicle?.make} {matchedCaptain.vehicle?.model}
+              </Text>
             </View>
             <View style={s.etaBadge}>
-              <Text style={s.etaValue}>3</Text>
-              <Text style={s.etaUnit}>min</Text>
+              <Text style={s.etaValue}>{matchedCaptain.distanceFromPickup?.toFixed(1) || '?'}</Text>
+              <Text style={s.etaUnit}>km</Text>
             </View>
           </View>
-          <View style={s.plate}><Text style={s.plateText}>{MOCK_CAPTAIN.vehicle.plateNumber}</Text></View>
-          <TouchableOpacity style={s.trackBtn} onPress={() => navigation.replace('ActiveRide', { rideId: 'ride_001' })}>
-            <LinearGradient colors={[Colors.primaryLight, Colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.trackBtnGrad}>
+          <View style={s.plate}>
+            <Text style={s.plateText}>{matchedCaptain.vehicle?.plateNumber}</Text>
+          </View>
+          {/* Show OTP to share with captain */}
+          <View style={s.otpBox}>
+            <Text style={s.otpLabel}>Share this OTP with your captain</Text>
+            <Text style={s.otpValue}>{rideOtp}</Text>
+          </View>
+          <TouchableOpacity
+            style={s.trackBtn}
+            onPress={() => navigation.replace('ActiveRide', { rideId })}>
+            <LinearGradient
+              colors={[Colors.primaryLight, Colors.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.trackBtnGrad}>
               <Text style={s.trackBtnText}>Track Captain →</Text>
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
       )}
+
       {phase === 'searching' && (
-        <TouchableOpacity style={s.cancelBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={s.cancelBtn} onPress={handleCancel}>
           <Text style={s.cancelText}>Cancel Search</Text>
         </TouchableOpacity>
       )}
@@ -114,40 +173,43 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation }) => {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, alignItems: 'center' },
   topGrad: { position: 'absolute', top: 0, left: 0, right: 0, height: 200 },
-  header: { marginTop: 80, alignItems: 'center', paddingHorizontal: Spacing['2xl'] },
-  title: { fontSize: FontSize['2xl'], fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', marginBottom: Spacing.sm },
-  subtitle: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center' },
-  pulseContainer: { marginTop: 48, width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
-  pulseRing: { position: 'absolute', width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.primary },
+  header: { alignItems: 'center', paddingTop: 64, paddingHorizontal: Spacing.xl, marginBottom: Spacing['2xl'] },
+  title: { fontSize: FontSize['2xl'], fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center', letterSpacing: -0.5, marginBottom: Spacing.xs },
+  subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
+  pulseContainer: { width: 160, height: 160, alignItems: 'center', justifyContent: 'center', marginVertical: Spacing['2xl'] },
+  pulseRing: { position: 'absolute', width: 160, height: 160, borderRadius: 80, backgroundColor: Colors.primary },
   pulseCenter: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', ...Shadow.glow },
-  statsRow: {
-    flexDirection: 'row', marginTop: 48, backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl, padding: Spacing.lg, marginHorizontal: Spacing.xl,
-    borderWidth: 1, borderColor: Colors.surfaceBorder, width: width - Spacing.xl * 2,
+  statsRow: { flexDirection: 'row', gap: Spacing.md, paddingHorizontal: Spacing.xl },
+  statItem: {
+    flex: 1, alignItems: 'center',
+    backgroundColor: Colors.surface, borderRadius: BorderRadius.md,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
   },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: FontSize.lg, fontWeight: FontWeight.black, color: Colors.textPrimary },
-  statLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  statValue: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  statLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2, textAlign: 'center' },
   matchCard: {
-    marginTop: 32, backgroundColor: Colors.surface, borderRadius: BorderRadius.xl,
-    padding: Spacing.xl, marginHorizontal: Spacing.xl, borderWidth: 1,
-    borderColor: Colors.surfaceBorder, width: width - Spacing.xl * 2, ...Shadow.lg,
+    width: width - 40, backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl, padding: Spacing.xl,
+    borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.card,
   },
-  captainRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
-  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
+  captainRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.white },
   captainInfo: { flex: 1 },
   captainName: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  captainMeta: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
-  vehicleText: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  etaBadge: { alignItems: 'center', backgroundColor: 'rgba(255,90,31,0.1)', borderRadius: BorderRadius.md, padding: Spacing.sm, borderWidth: 1, borderColor: 'rgba(255,90,31,0.3)', minWidth: 52 },
+  captainMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  vehicleText: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
+  etaBadge: { alignItems: 'center', backgroundColor: 'rgba(255,90,31,0.1)', borderRadius: BorderRadius.md, padding: Spacing.sm, minWidth: 52 },
   etaValue: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.primary },
-  etaUnit: { fontSize: FontSize.xs, color: Colors.primary },
-  plate: { alignSelf: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.sm, paddingVertical: 6, paddingHorizontal: Spacing.lg, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  plateText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary, letterSpacing: 2 },
-  trackBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden' },
-  trackBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center', justifyContent: 'center' },
+  etaUnit: { fontSize: FontSize.xs, color: Colors.textMuted },
+  plate: { backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.sm, paddingVertical: 6, paddingHorizontal: Spacing.md, alignSelf: 'flex-start', marginBottom: Spacing.md },
+  plateText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, letterSpacing: 2 },
+  otpBox: { backgroundColor: 'rgba(255,90,31,0.08)', borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: 'center', marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255,90,31,0.2)' },
+  otpLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 4 },
+  otpValue: { fontSize: 32, fontWeight: FontWeight.black, color: Colors.primary, letterSpacing: 8 },
+  trackBtn: { borderRadius: BorderRadius.md, overflow: 'hidden' },
+  trackBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center' },
   trackBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
-  cancelBtn: { marginTop: 32, paddingVertical: Spacing.md, paddingHorizontal: Spacing['2xl'], borderRadius: BorderRadius.full, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' },
-  cancelText: { color: Colors.error, fontWeight: FontWeight.semiBold, fontSize: FontSize.sm },
+  cancelBtn: { marginTop: Spacing['2xl'], paddingVertical: Spacing.md, paddingHorizontal: Spacing['2xl'] },
+  cancelText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
 });

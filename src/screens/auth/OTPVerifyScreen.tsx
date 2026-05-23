@@ -7,6 +7,7 @@ import {
   StatusBar,
   TextInput,
   Animated,
+  Dimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,21 +18,25 @@ import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../const
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OTPVerify'>;
 
+// Firebase Phone Auth uses a 6-digit OTP
 const OTP_LENGTH = 6;
-const MOCK_OTP = '123456';
 
 export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { phone } = route.params;
+  const { phone, role } = route.params;
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(30);
   const inputRef = useRef<TextInput>(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const { setUser, setToken } = useAuthStore();
+  const { verifyOtp, sendOtp } = useAuthStore();
 
   useEffect(() => {
-    inputRef.current?.focus();
+    // Focus keyboard on mount
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 400);
+
     const interval = setInterval(() => {
       setTimer(t => (t > 0 ? t - 1 : 0));
     }, 1000);
@@ -48,34 +53,36 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
     ]).start();
   };
 
-  const handleVerify = () => {
-    if (otp !== MOCK_OTP) {
-      setError('Invalid OTP. Try 123456');
-      shake();
-      return;
-    }
+  const handleVerify = async (otpCode = otp) => {
+    if (otpCode.length !== OTP_LENGTH) return;
+
     setError('');
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await verifyOtp(phone, otpCode, role);
+      // After successful login, navigate to main app based on role
+      navigation.replace(role === 'rider' ? ('RiderApp' as any) : ('CaptainApp' as any));
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.';
+      setError(msg);
+      shake();
+      setOtp('');
+      inputRef.current?.focus();
+    } finally {
       setLoading(false);
-      setUser({
-        id: 'user_001',
-        name: 'Arjun Sharma',
-        phone,
-        role: 'rider',
-        rating: 4.8,
-        totalRides: 42,
-      });
-      setToken('mock_token_abc123');
-      navigation.navigate('ProfileSetup', { phone });
-    }, 1000);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setTimer(30);
     setOtp('');
     setError('');
-    inputRef.current?.focus();
+    setTimeout(() => inputRef.current?.focus(), 100);
+    try {
+      await sendOtp(phone, role);
+    } catch {
+      setError('Failed to resend OTP. Please try again.');
+    }
   };
 
   const otpDigits = otp.split('').concat(Array(OTP_LENGTH - otp.length).fill(''));
@@ -94,62 +101,62 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
         <Text style={styles.title}>Verify OTP</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to{'\n'}
+          Enter the {OTP_LENGTH}-digit code sent to{'\n'}
           <Text style={styles.phone}>{phone}</Text>
         </Text>
-        <Text style={styles.hint}>💡 Use 123456 for demo</Text>
       </View>
 
-      {/* OTP Boxes */}
-      <Animated.View style={[styles.otpRow, { transform: [{ translateX: shakeAnim }] }]}>
-        {otpDigits.map((digit, i) => (
-          <TouchableOpacity
-            key={i}
-            onPress={() => inputRef.current?.focus()}
-            activeOpacity={1}>
-            <LinearGradient
-              colors={
-                digit
-                  ? [Colors.primaryLight, Colors.primary]
-                  : i === otp.length
-                  ? ['rgba(255,90,31,0.1)', 'rgba(255,90,31,0.05)']
-                  : [Colors.surfaceElevated, Colors.surfaceElevated]
-              }
-              style={[
-                styles.otpBox,
-                i === otp.length && styles.activeBox,
-                error ? styles.errorBox : null,
-              ]}>
-              <Text style={[styles.otpDigit, digit && styles.filledDigit]}>
-                {digit || ''}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ))}
-      </Animated.View>
+      {/* OTP Interactive Row Container */}
+      <View style={styles.otpContainer}>
+        <Animated.View style={[styles.otpRow, { transform: [{ translateX: shakeAnim }] }]}>
+          {otpDigits.map((digit, i) => (
+            <View key={i}>
+              <LinearGradient
+                colors={
+                  digit
+                    ? [Colors.primaryLight, Colors.primary]
+                    : i === otp.length
+                    ? ['rgba(255,90,31,0.1)', 'rgba(255,90,31,0.05)']
+                    : [Colors.surfaceElevated, Colors.surfaceElevated]
+                }
+                style={[
+                  styles.otpBox,
+                  i === otp.length && styles.activeBox,
+                  error ? styles.errorBox : null,
+                ]}>
+                <Text style={[styles.otpDigit, digit && styles.filledDigit]}>
+                  {digit || ''}
+                </Text>
+              </LinearGradient>
+            </View>
+          ))}
+        </Animated.View>
 
-      {/* Hidden input */}
-      <TextInput
-        ref={inputRef}
-        value={otp}
-        onChangeText={v => {
-          const clean = v.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH);
-          setOtp(clean);
-          setError('');
-          if (clean.length === OTP_LENGTH) {
-            setTimeout(() => handleVerify(), 200);
-          }
-        }}
-        keyboardType="numeric"
-        style={styles.hiddenInput}
-        maxLength={OTP_LENGTH}
-      />
+        {/* Hidden but interactive full-row overlay input */}
+        <TextInput
+          ref={inputRef}
+          value={otp}
+          onChangeText={v => {
+            const clean = v.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH);
+            setOtp(clean);
+            setError('');
+            if (clean.length === OTP_LENGTH) {
+              setTimeout(() => handleVerify(clean), 200);
+            }
+          }}
+          keyboardType="number-pad"
+          style={styles.hiddenInput}
+          maxLength={OTP_LENGTH}
+          caretHidden
+          autoFocus={true}
+        />
+      </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Button
         title={loading ? 'Verifying...' : 'Verify & Continue'}
-        onPress={handleVerify}
+        onPress={() => handleVerify()}
         loading={loading}
         disabled={otp.length !== OTP_LENGTH}
         style={styles.btn}
@@ -191,20 +198,46 @@ const styles = StyleSheet.create({
   title: { fontSize: FontSize['3xl'], fontWeight: FontWeight.black, color: Colors.textPrimary, letterSpacing: -1, marginBottom: Spacing.sm },
   subtitle: { fontSize: FontSize.md, color: Colors.textSecondary, lineHeight: 24 },
   phone: { color: Colors.primary, fontWeight: FontWeight.bold },
-  hint: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: Spacing.sm },
-  otpRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  
+  // Container that receives all taps and forwards them to the TextInput
+  otpContainer: {
+    position: 'relative',
+    marginVertical: Spacing.xl,
+    height: 60,
+    justifyContent: 'center',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   otpBox: {
-    width: 50, height: 58,
+    width: 46,
+    height: 52,
     borderRadius: BorderRadius.md,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: Colors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.surfaceBorder,
   },
   activeBox: { borderColor: Colors.primary },
   errorBox: { borderColor: Colors.error },
-  otpDigit: { fontSize: FontSize['2xl'], fontWeight: FontWeight.bold, color: Colors.textMuted },
+  otpDigit: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textMuted },
   filledDigit: { color: Colors.white },
-  hiddenInput: { position: 'absolute', opacity: 0, height: 0 },
-  error: { color: Colors.error, fontSize: FontSize.sm, marginBottom: Spacing.md },
+  
+  // Invisible input stretched to cover the entire container row
+  hiddenInput: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0.01,
+    color: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  error: { color: Colors.error, fontSize: FontSize.sm, marginBottom: Spacing.md, textAlign: 'center' },
   btn: { marginBottom: Spacing.lg },
   resendRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   resendText: { color: Colors.textSecondary, fontSize: FontSize.sm },

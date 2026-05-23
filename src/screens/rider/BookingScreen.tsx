@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   StatusBar,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RiderStackParamList } from '../../types';
+import { RiderStackParamList, RideType, PaymentMethod } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { useRideStore } from '../../store/rideStore';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'Booking'>;
 
@@ -78,11 +80,36 @@ const PAYMENT_METHODS = [
 ];
 
 export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
-  const [selectedRide, setSelectedRide] = useState('auto');
-  const [selectedPayment, setSelectedPayment] = useState('upi');
+  const [selectedRide, setSelectedRide] = useState<RideType>('auto');
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
+  const [isBooking, setIsBooking] = useState(false);
   const slideAnim = useRef(new Animated.Value(height)).current;
 
-  React.useEffect(() => {
+  const {
+    setPickup, setDropoff, setSelectedRideType, setPaymentMethod,
+    fetchEstimate, requestRide,
+    estimatedFare, estimatedDistance, estimatedDuration, isSurge, availableCaptains,
+    isLoading,
+  } = useRideStore();
+
+  // Hydrate store with route params
+  useEffect(() => {
+    setPickup(route.params.pickup);
+    setDropoff(route.params.dropoff);
+  }, []);
+
+  // Fetch estimate whenever ride type changes
+  useEffect(() => {
+    setSelectedRideType(selectedRide);
+    setPaymentMethod(selectedPayment);
+    // Delay slightly so store updates propagate
+    const timer = setTimeout(() => {
+      fetchEstimate().catch(() => {});
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [selectedRide]);
+
+  useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
       tension: 50,
@@ -91,7 +118,29 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     }).start();
   }, []);
 
+  const handleBook = async () => {
+    if (!availableCaptains && availableCaptains === 0) {
+      Alert.alert('No Captains', 'No captains available in your area. Try again in a moment.');
+      return;
+    }
+    setIsBooking(true);
+    try {
+      setPaymentMethod(selectedPayment);
+      const rideId = await requestRide();
+      if (rideId) {
+        navigation.navigate('RideSearch', { rideId });
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to request ride. Please try again.');
+    } finally {
+      setIsBooking(false);
+    }
+  };
+
   const selected = RIDE_OPTIONS.find(r => r.id === selectedRide)!;
+  const displayFare = estimatedFare || selected.price;
+  const displayDistance = estimatedDistance || 0;
+  const displayDuration = estimatedDuration || selected.eta;
 
   return (
     <View style={styles.container}>
@@ -115,7 +164,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {/* Bottom Sheet */}
       <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-        {/* Route summary */}
+      {/* Route summary */}
         <View style={styles.routeCard}>
           <View style={styles.routeRow}>
             <View style={styles.routeDotPickup} />
@@ -131,8 +180,15 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
           <View style={styles.routeMeta}>
-            <Text style={styles.routeMetaText}>📏 4.2 km</Text>
-            <Text style={styles.routeMetaText}>⏱ ~18 min</Text>
+            <Text style={styles.routeMetaText}>
+              📏 {displayDistance > 0 ? `${displayDistance} km` : 'Calculating...'}
+            </Text>
+            <Text style={styles.routeMetaText}>
+              ⏱ ~{displayDuration} min
+            </Text>
+            {availableCaptains > 0 && (
+              <Text style={styles.routeMetaText}>🚗 {availableCaptains} nearby</Text>
+            )}
           </View>
         </View>
 
@@ -142,11 +198,11 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.rideRow}>
-          {RIDE_OPTIONS.map(ride => (
+          {RIDE_OPTIONS.filter(r => r.id !== 'cab_xl').map(ride => (
             <TouchableOpacity
               key={ride.id}
               style={[styles.rideCard, selectedRide === ride.id && styles.rideCardActive]}
-              onPress={() => setSelectedRide(ride.id)}>
+              onPress={() => setSelectedRide(ride.id as RideType)}>
               {selectedRide === ride.id && (
                 <LinearGradient
                   colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
@@ -160,10 +216,12 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
               </Text>
               <Text style={styles.rideDesc}>{ride.desc}</Text>
               <View style={styles.ridePriceRow}>
-                {ride.surgePrice && (
-                  <Text style={styles.rideSurge}>₹{ride.surgePrice}</Text>
+                {isSurge && selectedRide === ride.id && (
+                  <Text style={styles.rideSurge}>Surge</Text>
                 )}
-                <Text style={styles.ridePrice}>₹{ride.price}</Text>
+                <Text style={styles.ridePrice}>
+                  {isLoading && selectedRide === ride.id ? '...' : `₹${selectedRide === ride.id ? displayFare : ride.price}`}
+                </Text>
               </View>
               <Text style={styles.rideEta}>{ride.eta} min</Text>
             </TouchableOpacity>
@@ -190,26 +248,16 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
         <TouchableOpacity
           style={styles.bookBtn}
           activeOpacity={0.9}
-          onPress={() => navigation.navigate('RideSearch', {
-            rideRequest: {
-              id: 'req_' + Date.now(),
-              riderId: 'usr_001',
-              pickup: route.params.pickup,
-              dropoff: route.params.dropoff,
-              rideType: selectedRide as any,
-              estimatedFare: selected.price,
-              estimatedDistance: 4.2,
-              estimatedDuration: 18,
-              status: 'searching',
-              createdAt: new Date().toISOString(),
-            },
-          })}>
+          disabled={isBooking || isLoading}
+          onPress={handleBook}>
           <LinearGradient
             colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.bookBtnGrad}>
-            <Text style={styles.bookBtnText}>Book {selected.icon} · ₹{selected.price}</Text>
+            <Text style={styles.bookBtnText}>
+              {isBooking ? 'Booking...' : `Book ${selected.icon} · ₹${displayFare}`}
+            </Text>
             <Text style={styles.bookBtnArrow}>→</Text>
           </LinearGradient>
         </TouchableOpacity>

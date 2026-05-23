@@ -60,10 +60,13 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
       ]),
     ).start();
 
-    const timer = setTimeout(() => {
-      navigation.replace('Welcome');
-    }, 2800);
+    const checkAuth = async () => {
+      const { loadFromStorage } = require('../../store/authStore').useAuthStore.getState();
+      const isLoggedIn = await loadFromStorage();
+      navigation.replace(isLoggedIn ? ('MainApp' as any) : 'Welcome');
+    };
 
+    const timer = setTimeout(checkAuth, 2000);
     return () => clearTimeout(timer);
   }, []);
 

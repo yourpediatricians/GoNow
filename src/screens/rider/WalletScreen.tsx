@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  StatusBar, Dimensions,
+  StatusBar, Dimensions, ActivityIndicator, Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { walletService } from '../../services/wallet.service';
 
 const { width } = Dimensions.get('window');
 
@@ -20,10 +21,51 @@ const TRANSACTIONS = [
 const QUICK_AMOUNTS = [100, 200, 500, 1000];
 
 export const WalletScreen: React.FC = () => {
-  const [balance] = useState(340);
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'credit' | 'debit'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
 
-  const filtered = TRANSACTIONS.filter(t => activeTab === 'all' || t.type === activeTab);
+  useEffect(() => {
+    fetchWalletData();
+  }, []);
+
+  const fetchWalletData = async () => {
+    setIsLoading(true);
+    try {
+      const result = await walletService.getTransactions(1, 20);
+      setBalance(result.data.balance);
+      setTransactions(result.data.transactions || []);
+    } catch {
+      // Fail silently
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddMoney = async (amount: number) => {
+    setIsAdding(true);
+    try {
+      const result = await walletService.addMoney(amount);
+      setBalance(result.data.newBalance);
+      Alert.alert('Success', `₹${amount} added to your wallet!`);
+      fetchWalletData(); // refresh transactions
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to add money');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const filtered = activeTab === 'all' ? transactions : transactions.filter(t => t.type === activeTab);
+
+  const formatTxDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return 'Today, ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  };
 
   return (
     <View style={s.container}>
@@ -50,14 +92,18 @@ export const WalletScreen: React.FC = () => {
           <Text style={s.sectionTitle}>Add Money</Text>
           <View style={s.quickAmountsRow}>
             {QUICK_AMOUNTS.map(amt => (
-              <TouchableOpacity key={amt} style={s.amountChip}>
+              <TouchableOpacity
+                key={amt}
+                style={s.amountChip}
+                onPress={() => handleAddMoney(amt)}
+                disabled={isAdding}>
                 <Text style={s.amountChipText}>+₹{amt}</Text>
               </TouchableOpacity>
             ))}
           </View>
-          <TouchableOpacity style={s.addBtn} activeOpacity={0.9}>
+          <TouchableOpacity style={s.addBtn} activeOpacity={0.9} onPress={() => handleAddMoney(500)} disabled={isAdding}>
             <LinearGradient colors={[Colors.primaryLight, Colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.addBtnGrad}>
-              <Text style={s.addBtnText}>Add Money via UPI / Cards</Text>
+              <Text style={s.addBtnText}>{isAdding ? 'Processing...' : 'Add Money via UPI / Cards'}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>

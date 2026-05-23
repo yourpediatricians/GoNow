@@ -7,58 +7,77 @@ import {
   Animated,
   Dimensions,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { useRideStore } from '../../store/rideStore';
+import { getSocket, SOCKET_EVENTS } from '../../services/socket.service';
+import { rideService } from '../../services/ride.service';
 
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#1a1a1a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#a0a0a0' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2e2e2e' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d0d0d' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-];
+const { width } = Dimensions.get('window');
 
-const MOCK_CAPTAIN = {
-  name: 'Rajesh Kumar',
-  rating: 4.9,
-  totalRides: 2840,
-  vehicle: { type: 'bike', make: 'Honda', model: 'Activa 6G', color: 'Black', plateNumber: 'KA 05 AB 1234' },
-  eta: 3,
-};
-
-const ROUTE_COORDS = [
-  { latitude: 12.9620, longitude: 77.5850 },
-  { latitude: 12.9650, longitude: 77.5880 },
-  { latitude: 12.9680, longitude: 77.5900 },
-  { latitude: 12.9710, longitude: 77.5930 },
-  { latitude: 12.9716, longitude: 77.5946 },
-];
-
-export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
+export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
+  const { rideId } = route.params || {};
   const [status, setStatus] = useState<'arriving' | 'in_progress' | 'completed'>('arriving');
-  const [eta, setEta] = useState(MOCK_CAPTAIN.eta);
+  const [rideDetails, setRideDetails] = useState<any>(null);
+  const [captainLocation, setCaptainLocation] = useState<any>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(200)).current;
 
-  const handleComplete = () => {
-    navigation.navigate('RideComplete', {
-      ride: {
-        id: 'ride_001',
-        pickup: { latitude: 12.962, longitude: 77.585, address: 'Koramangala 5th Block' },
-        dropoff: { latitude: 12.9716, longitude: 77.5946, address: 'MG Road Metro Station' },
-        rideType: 'bike',
-        fare: 85,
-        distance: 4.2,
-        duration: 14,
-        status: 'completed',
-        date: new Date().toISOString(),
-        captain: { ...MOCK_CAPTAIN, id: 'cap_001', currentLocation: ROUTE_COORDS[2], isOnline: true },
-        rating: undefined,
+  const { cancelRide } = useRideStore();
+
+  const fetchRideDetails = async () => {
+    if (!rideId) return;
+    try {
+      const res = await rideService.getRideById(rideId);
+      if (res.success && res.data) {
+        const ride = res.data.ride;
+        setRideDetails(ride);
+
+        // Update status state based on database ride status
+        if (ride.status === 'otp_verified' || ride.status === 'in_progress') {
+          setStatus('in_progress');
+        } else if (ride.status === 'completed') {
+          setStatus('completed');
+          navigateToComplete(ride);
+        } else if (ride.status === 'cancelled') {
+          Alert.alert('Ride Cancelled', 'This ride has been cancelled.');
+          navigation.navigate('Home');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching active ride details:', err);
+    }
+  };
+
+  const navigateToComplete = (rideObj: any) => {
+    const captainInfo = rideObj.captain || {};
+    const formattedRide = {
+      id: rideObj._id,
+      pickup: {
+        address: rideObj.pickup?.address || '',
+        latitude: rideObj.pickup?.coordinates?.[1] || 0,
+        longitude: rideObj.pickup?.coordinates?.[0] || 0,
       },
-    });
+      dropoff: {
+        address: rideObj.dropoff?.address || '',
+        latitude: rideObj.dropoff?.coordinates?.[1] || 0,
+        longitude: rideObj.dropoff?.coordinates?.[0] || 0,
+      },
+      rideType: rideObj.rideType || 'bike',
+      fare: rideObj.fare?.actual || rideObj.fare?.estimated || 0,
+      distance: rideObj.distance || 0,
+      duration: rideObj.actualDuration || rideObj.estimatedDuration || 0,
+      status: rideObj.status,
+      date: rideObj.createdAt,
+      captain: {
+        name: captainInfo.name || 'Captain',
+        rating: captainInfo.rating || 5.0,
+      },
+    };
+    navigation.replace('RideComplete', { ride: formattedRide });
   };
 
   useEffect(() => {
@@ -73,19 +92,73 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
       ]),
     ).start();
 
-    const etaTimer = setInterval(() => {
-      setEta(e => {
-        if (e <= 1) {
-          clearInterval(etaTimer);
-          setStatus('in_progress');
-          return 0;
-        }
-        return e - 1;
-      });
-    }, 3000);
+    fetchRideDetails();
 
-    return () => clearInterval(etaTimer);
-  }, []);
+    // ── Socket event listeners ───────────────────────────────────────────────
+    const socket = getSocket();
+    if (socket) {
+      socket.on(SOCKET_EVENTS.RIDE_STARTED, (data: any) => {
+        setStatus('in_progress');
+        fetchRideDetails();
+      });
+
+      socket.on(SOCKET_EVENTS.RIDE_COMPLETED, (data: any) => {
+        setStatus('completed');
+        // Fetch final details first, then navigate
+        fetchRideDetails().then(() => {
+          if (rideDetails) {
+            navigateToComplete({ ...rideDetails, status: 'completed' });
+          } else {
+            // Fallback navigation with incoming socket data
+            navigateToComplete(data.ride || { _id: rideId, status: 'completed' });
+          }
+        });
+      });
+
+      socket.on(SOCKET_EVENTS.RIDE_CANCELLED, (data: any) => {
+        Alert.alert('Ride Cancelled', data.reason || 'The captain has cancelled this ride.');
+        navigation.reset({ index: 0, routes: [{ name: 'RiderTabs' }] });
+      });
+
+      socket.on(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE, (data: any) => {
+        setCaptainLocation({
+          latitude: data.latitude,
+          longitude: data.longitude,
+        });
+      });
+    }
+
+    return () => {
+      if (socket) {
+        socket.off(SOCKET_EVENTS.RIDE_STARTED);
+        socket.off(SOCKET_EVENTS.RIDE_COMPLETED);
+        socket.off(SOCKET_EVENTS.RIDE_CANCELLED);
+        socket.off(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE);
+      }
+    };
+  }, [rideId]);
+
+  const handleCancel = async () => {
+    Alert.alert(
+      'Cancel Ride',
+      'Are you sure you want to cancel this ride?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelRide('Cancelled by rider');
+              navigation.reset({ index: 0, routes: [{ name: 'RiderTabs' }] });
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message || 'Failed to cancel ride');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const STATUS_CONFIG = {
     arriving: { label: 'Captain is arriving', color: Colors.warning, emoji: '🏍️' },
@@ -94,6 +167,12 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
   };
 
   const config = STATUS_CONFIG[status];
+
+  // Prepare UI text values
+  const captain = rideDetails?.captain || {};
+  const vehicle = rideDetails?.captainProfile?.vehicle || captain?.vehicle || {};
+  const isBike = rideDetails?.rideType === 'bike';
+  const rideEmoji = isBike ? '🏍️' : rideDetails?.rideType === 'auto' ? '🛺' : '🚗';
 
   return (
     <View style={styles.container}>
@@ -107,7 +186,7 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
         {/* Captain marker */}
         <Animated.View style={[styles.captainPin, { position: 'absolute', top: '38%', left: '44%', transform: [{ scale: pulseAnim }] }]}>
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.captainPinGrad}>
-            <Text style={{ fontSize: 16 }}>🏍️</Text>
+            <Text style={{ fontSize: 16 }}>{rideEmoji}</Text>
           </LinearGradient>
         </Animated.View>
         {/* Drop marker */}
@@ -123,15 +202,15 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
         <View style={[styles.statusDot, { backgroundColor: config.color }]} />
         <Text style={styles.statusText}>{config.label}</Text>
         {status === 'arriving' && (
-          <Text style={styles.etaText}>{eta} min</Text>
+          <Text style={styles.etaText}>~3 min</Text>
         )}
       </View>
 
       {/* OTP Card */}
-      {status === 'arriving' && (
+      {status === 'arriving' && rideDetails?.otp && (
         <View style={styles.otpCard}>
           <Text style={styles.otpLabel}>Share OTP with captain</Text>
-          <Text style={styles.otpValue}>4829</Text>
+          <Text style={styles.otpValue}>{rideDetails.otp}</Text>
         </View>
       )}
 
@@ -140,39 +219,38 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
         {/* Captain info */}
         <View style={styles.captainRow}>
           <View style={styles.captainAvatar}>
-            <Text style={styles.captainAvatarText}>R</Text>
+            <Text style={styles.captainAvatarText}>{captain.name?.charAt(0) || 'C'}</Text>
           </View>
           <View style={styles.captainInfo}>
-            <Text style={styles.captainName}>{MOCK_CAPTAIN.name}</Text>
+            <Text style={styles.captainName}>{captain.name || 'Looking for captain...'}</Text>
             <View style={styles.captainMeta}>
-              <Text style={styles.captainRating}>⭐ {MOCK_CAPTAIN.rating}</Text>
-              <Text style={styles.captainRides}> · {MOCK_CAPTAIN.totalRides} rides</Text>
+              <Text style={styles.captainRating}>⭐ {captain.rating || 5.0}</Text>
+              <Text style={styles.captainRides}> · {captain.totalRides || 120} rides</Text>
             </View>
             <Text style={styles.vehicleInfo}>
-              {MOCK_CAPTAIN.vehicle.color} {MOCK_CAPTAIN.vehicle.make} {MOCK_CAPTAIN.vehicle.model}
+              {vehicle.color || ''} {vehicle.make || ''} {vehicle.model || 'Vehicle'}
             </Text>
           </View>
           <View style={styles.captainActions}>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Call Captain', `Dialing: ${captain.phone}`)}>
               <Text style={styles.actionBtnText}>📞</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
-              <Text style={styles.actionBtnText}>💬</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Plate */}
-        <View style={styles.plateBadge}>
-          <Text style={styles.plateText}>{MOCK_CAPTAIN.vehicle.plateNumber}</Text>
-        </View>
+        {vehicle.plateNumber && (
+          <View style={styles.plateBadge}>
+            <Text style={styles.plateText}>{vehicle.plateNumber}</Text>
+          </View>
+        )}
 
         {/* Trip info */}
         <View style={styles.tripRow}>
           {[
-            { label: 'Distance', value: '4.2 km' },
-            { label: 'Duration', value: '18 min' },
-            { label: 'Fare', value: '₹85' },
+            { label: 'Distance', value: `${rideDetails?.distance || 0} km` },
+            { label: 'Duration', value: `${rideDetails?.estimatedDuration || 0} min` },
+            { label: 'Fare', value: `₹${rideDetails?.fare?.estimated || 0}` },
           ].map((item, i) => (
             <View key={i} style={styles.tripItem}>
               <Text style={styles.tripValue}>{item.value}</Text>
@@ -181,17 +259,14 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Emergency */}
-        <TouchableOpacity style={styles.sosBtn}>
-          <Text style={styles.sosBtnText}>🆘 Emergency SOS</Text>
-        </TouchableOpacity>
-
-        {/* Complete ride (shown in progress) */}
-        {status === 'in_progress' && (
-          <TouchableOpacity style={styles.completeBtn} onPress={handleComplete} activeOpacity={0.9}>
-            <LinearGradient colors={[Colors.success, '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.completeBtnGrad}>
-              <Text style={styles.completeBtnText}>✓ I've Arrived — End Ride</Text>
-            </LinearGradient>
+        {/* Cancel/Emergency */}
+        {status === 'arriving' ? (
+          <TouchableOpacity style={styles.sosBtn} onPress={handleCancel}>
+            <Text style={styles.sosBtnText}>Cancel Ride</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.sosBtn} onPress={() => Alert.alert('Emergency', 'SOS Alert sent to support and emergency contacts!')}>
+            <Text style={styles.sosBtnText}>🆘 Emergency SOS</Text>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -299,9 +374,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.error,
   },
   sosBtnText: { color: Colors.error, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
-  completeBtn: { marginTop: Spacing.md, borderRadius: BorderRadius.lg, overflow: 'hidden' },
-  completeBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center', justifyContent: 'center' },
-  completeBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
   fakeRoute: {
     position: 'absolute',
     top: '22%',

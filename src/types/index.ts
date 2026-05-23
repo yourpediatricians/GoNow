@@ -71,12 +71,14 @@ export interface ActiveRide extends RideRequest {
 export interface CaptainInfo {
   id: string;
   name: string;
+  phone?: string;
   avatar?: string;
   rating: number;
   totalRides: number;
   vehicle: Vehicle;
-  currentLocation: Coordinates;
-  isOnline: boolean;
+  currentLocation?: Coordinates;
+  isOnline?: boolean;
+  distanceFromPickup?: number; // km
 }
 
 export interface Vehicle {
@@ -116,9 +118,9 @@ export interface RideHistory {
 export type AuthStackParamList = {
   Splash: undefined;
   Welcome: undefined;
-  PhoneEntry: undefined;
-  OTPVerify: { phone: string };
-  ProfileSetup: { phone: string };
+  PhoneEntry: { role: UserRole };
+  OTPVerify: { phone: string; role: UserRole };
+  ProfileSetup: { phone: string; role: UserRole };
   RoleSelect: undefined;
 };
 
@@ -139,9 +141,9 @@ export type RiderTabParamList = {
 export type RiderStackParamList = {
   RiderTabs: undefined;
   Booking: { pickup: Location; dropoff: Location };
-  RideSearch: { rideRequest: RideRequest };
+  RideSearch: { rideId: string };
   ActiveRide: { rideId: string };
-  RideComplete: { ride: RideHistory };
+  RideComplete: { rideId: string; fare: number; distance: number; rideType: RideType };
   SelectLocation: { type: 'pickup' | 'dropoff' };
 };
 
