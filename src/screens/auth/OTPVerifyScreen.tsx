@@ -14,7 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../constants/theme';
+import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OTPVerify'>;
 
@@ -27,8 +27,10 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(30);
+  const [verified, setVerified] = useState(false);  // ← new: track OTP success for captain
   const inputRef = useRef<TextInput>(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const successScale = useRef(new Animated.Value(0)).current;
   const { verifyOtp, sendOtp } = useAuthStore();
 
   useEffect(() => {
@@ -60,8 +62,12 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
     setLoading(true);
     try {
       await verifyOtp(phone, otpCode, role);
-      // After successful login, navigate to main app based on role
-      navigation.replace(role === 'rider' ? ('RiderApp' as any) : ('CaptainApp' as any));
+
+      if (role === 'captain') {
+        // For captain: show success screen with Start Onboard button
+        setVerified(true);
+        Animated.spring(successScale, { toValue: 1, tension: 60, friction: 7, useNativeDriver: true }).start();
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.';
       setError(msg);
@@ -87,6 +93,77 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const otpDigits = otp.split('').concat(Array(OTP_LENGTH - otp.length).fill(''));
 
+  // ── Captain verified success screen ──────────────────────────────────────────
+  if (verified && role === 'captain') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <LinearGradient colors={['#001A08', Colors.background]} style={styles.successGrad} />
+
+        <View style={styles.successContent}>
+          {/* Animated check */}
+          <Animated.View style={[styles.successCircle, { transform: [{ scale: successScale }] }]}>
+            <LinearGradient colors={[Colors.success, '#16A34A']} style={styles.successGradCircle}>
+              <Text style={styles.successCheck}>✓</Text>
+            </LinearGradient>
+          </Animated.View>
+
+          <Text style={styles.successTitle}>Phone Verified!</Text>
+          <Text style={styles.successSubtitle}>
+            Your number <Text style={styles.successPhone}>{phone}</Text>{' '}
+            has been verified successfully.
+          </Text>
+
+          {/* Divider with label */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerLabel}>What's next</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Steps */}
+          {[
+            { icon: '👤', title: 'Personal Details', desc: 'Name, profile photo' },
+            { icon: '🚗', title: 'Vehicle Info', desc: 'Type, make, model, plate' },
+            { icon: '📄', title: 'Documents', desc: 'Licence, RC, insurance' },
+            { icon: '✅', title: 'Go Live!', desc: 'Start accepting rides' },
+          ].map((step, i) => (
+            <View key={i} style={styles.stepRow}>
+              <View style={styles.stepIconWrap}>
+                <Text style={styles.stepIcon}>{step.icon}</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{step.title}</Text>
+                <Text style={styles.stepDesc}>{step.desc}</Text>
+              </View>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>{i + 1}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* CTA */}
+        <View style={styles.successFooter}>
+          <TouchableOpacity
+            style={styles.onboardBtn}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('CaptainOnboarding' as any)}>
+            <LinearGradient
+              colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.onboardBtnGrad}>
+              <Text style={styles.onboardBtnText}>🚀  Start Onboard</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <Text style={styles.onboardNote}>Takes about 5 minutes to complete</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── OTP entry screen ──────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -243,4 +320,45 @@ const styles = StyleSheet.create({
   resendText: { color: Colors.textSecondary, fontSize: FontSize.sm },
   timer: { color: Colors.textMuted, fontSize: FontSize.sm, fontWeight: FontWeight.medium },
   resendLink: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+
+  // ── Success / Onboard styles ──────────────────────────────────────────────────
+  successGrad: { ...StyleSheet.absoluteFillObject },
+  successContent: { flex: 1, paddingHorizontal: Spacing['2xl'], paddingTop: 60, gap: Spacing.lg },
+  successCircle: { alignSelf: 'center', marginBottom: Spacing.sm },
+  successGradCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  successCheck: { fontSize: 44, color: Colors.white, fontWeight: FontWeight.black },
+  successTitle: { fontSize: FontSize['3xl'], fontWeight: FontWeight.black, color: Colors.textPrimary, textAlign: 'center' },
+  successSubtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  successPhone: { color: Colors.primary, fontWeight: FontWeight.bold },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginVertical: Spacing.sm },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.surfaceBorder },
+  dividerLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semiBold, letterSpacing: 1 },
+  stepRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.surface, borderRadius: BorderRadius.lg,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
+  },
+  stepIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,90,31,0.08)', borderWidth: 1, borderColor: 'rgba(255,90,31,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepIcon: { fontSize: 20 },
+  stepText: { flex: 1 },
+  stepTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  stepDesc: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  stepNumber: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepNumberText: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold },
+  successFooter: { paddingHorizontal: Spacing['2xl'], paddingBottom: 40, gap: Spacing.sm },
+  onboardBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden' },
+  onboardBtnGrad: { paddingVertical: Spacing.lg, alignItems: 'center', justifyContent: 'center' },
+  onboardBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3 },
+  onboardNote: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'center' },
 });

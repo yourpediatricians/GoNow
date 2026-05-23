@@ -9,6 +9,7 @@ import { SplashScreen } from '../screens/auth/SplashScreen';
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { PhoneEntryScreen } from '../screens/auth/PhoneEntryScreen';
 import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
+import { CaptainOnboardingScreen } from '../screens/auth/CaptainOnboardingScreen';
 
 // Screens - Rider
 import { RiderHomeScreen } from '../screens/rider/HomeScreen';
@@ -39,6 +40,11 @@ const AuthNavigator = () => (
     <AuthStack.Screen name="OTPVerify" component={OTPVerifyScreen} />
     <AuthStack.Screen name="RoleSelect" component={WelcomeScreen} />
     <AuthStack.Screen name="ProfileSetup" component={WelcomeScreen} />
+    <AuthStack.Screen
+      name="CaptainOnboarding"
+      component={CaptainOnboardingScreen}
+      options={{ animation: 'slide_from_right' }}
+    />
   </AuthStack.Navigator>
 );
 
@@ -145,7 +151,11 @@ export const RootNavigator = () => {
         {!isAuthenticated ? (
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         ) : user?.role === 'captain' ? (
-          <RootStack.Screen name="Captain" component={CaptainTabNavigator} />
+          !user?.name ? (
+            <RootStack.Screen name="CaptainOnboarding" component={CaptainOnboardingScreen} />
+          ) : (
+            <RootStack.Screen name="Captain" component={CaptainTabNavigator} />
+          )
         ) : (
           <RootStack.Screen name="Rider" component={RiderNavigator} />
         )}

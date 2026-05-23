@@ -10,8 +10,15 @@
  */
 
 // ── Dev (local backend) ────────────────────────────────────────────────────────
-const DEV_BASE_URL = 'http://10.65.63.38:5000/api';
-const DEV_SOCKET_URL = 'http://10.65.63.38:5000';
+// const DEV_BASE_URL = 'http://10.65.63.38:5000/api';
+// const DEV_SOCKET_URL = 'http://10.65.63.38:5000';
+
+import { Platform } from 'react-native';
+
+// — Dev (local backend) ———————————————————
+const DEV_HOST = 'localhost';
+const DEV_BASE_URL = `http://${DEV_HOST}:5001/api`;
+const DEV_SOCKET_URL = `http://${DEV_HOST}:5001`;
 
 // ── Production (replace with your deployed URL) ────────────────────────────────
 const PROD_BASE_URL = 'https://api.gonow.app/api'; // 👈 change this when deploying

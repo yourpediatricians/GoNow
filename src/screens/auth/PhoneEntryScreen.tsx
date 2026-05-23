@@ -47,7 +47,8 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation, route }) => {
 
       navigation.navigate('OTPVerify', { phone: fullPhone, role });
     } catch (err: any) {
-      const msg = err?.response?.data?.message || 'Failed to send OTP. Check your connection.';
+      console.error('PhoneEntryScreen handleSendOTP error:', err);
+      const msg = err?.message || err?.response?.data?.message || 'Failed to send OTP. Check your connection.';
       setError(msg);
     } finally {
       setLoading(false);

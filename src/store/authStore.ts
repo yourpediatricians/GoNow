@@ -28,9 +28,25 @@ interface AuthState {
 // Module-level variable to hold the non-serializable confirmation result from Firebase
 let confirmationResult: any = null;
 
+// ─── DEV BYPASS ───────────────────────────────────────────────────────────────
+// Set to true to skip Firebase auth and go straight to the app.
+// Change `role` to 'rider' or 'captain' to test different flows.
+const DEV_BYPASS = true;
+const DEV_ROLE: UserRole = 'rider'; // 👈 change to 'rider' to test rider flow
+
+const DEV_USER: User = {
+  id: 'dev_001',
+  name: 'Arjun Sharma',
+  phone: '+91 98765 43210',
+  role: DEV_ROLE,
+  rating: 4.9,
+  totalRides: 2840,
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  isAuthenticated: false,
+  user: DEV_BYPASS ? DEV_USER : null,
+  isAuthenticated: DEV_BYPASS,
   isLoading: false,
   token: null,
 
@@ -152,18 +168,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    * Log out — clear all stored data, disconnect socket.
    */
   logout: async () => {
-    try {
-      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-      if (refreshToken) {
-        await authService.logout(refreshToken).catch(() => {}); // best effort
-      }
-      // Also sign out from native Firebase Auth session
-      await auth().signOut().catch(() => {});
-    } finally {
-      await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
-      disconnectSocket();
-      set({ user: null, isAuthenticated: false, token: null });
-      confirmationResult = null;
+    // 1. Clear local state and Storage immediately (Instant UI response!)
+    const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN).catch(() => null);
+    
+    await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS)).catch(() => {});
+    disconnectSocket();
+    set({ user: null, isAuthenticated: false, token: null });
+    confirmationResult = null;
+
+    // 2. Fire and forget remote calls in the background (Non-blocking!)
+    if (refreshToken) {
+      authService.logout(refreshToken).catch(() => {}); // best effort
     }
+    auth().signOut().catch(() => {});
   },
 }));

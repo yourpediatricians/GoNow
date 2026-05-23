@@ -37,11 +37,21 @@ export const useCaptainStore = create<CaptainState>((set) => ({
   isOnline: false,
   currentLocation: null,
   incomingRequest: null,
-  todayEarnings: 0,
-  todayRides: 0,
-  weeklyEarnings: [],
+  // ── Dev seed data — replaced by fetchEarnings() when backend is live ──
+  todayEarnings: 960,
+  todayRides: 9,
+  weeklyEarnings: [
+    { date: 'Mon', amount: 820, rides: 8 },
+    { date: 'Tue', amount: 1120, rides: 11 },
+    { date: 'Wed', amount: 640, rides: 6 },
+    { date: 'Thu', amount: 1380, rides: 13 },
+    { date: 'Fri', amount: 1750, rides: 17 },
+    { date: 'Sat', amount: 2100, rides: 20 },
+    { date: 'Sun', amount: 960, rides: 9 },
+  ],
+  // ─────────────────────────────────────────────────────────────────────
   totalEarnings: 0,
-  acceptanceRate: 100,
+  acceptanceRate: 98,
   activeRideId: null,
   isLoading: false,
 
