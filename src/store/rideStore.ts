@@ -159,7 +159,17 @@ export const useRideStore = create<RideState>((set, get) => ({
         availableCaptains: captainsObj[currentSelected] || 0,
       });
     } catch (err: any) {
-      set({ error: err.response?.data?.message || 'Failed to get estimate' });
+      set({
+        error: err.response?.data?.message || 'Failed to get estimate',
+        estimatedFare: 0,
+        estimatedDistance: 0,
+        estimatedDuration: 0,
+        isSurge: false,
+        availableCaptains: 0,
+        estimatedFares: {},
+        estimatedDurations: {},
+        availableCaptainsMap: {},
+      });
       throw err;
     } finally {
       set({ isLoading: false });

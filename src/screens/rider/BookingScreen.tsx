@@ -264,10 +264,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.bookBtnGrad}>
-            <Text style={[styles.bookBtnText, !!error && { color: Colors.textMuted }]}>
-              {isBooking ? 'Booking...' : !!error ? 'Route Unavailable' : `Book ${selected.icon} · ₹${displayFare}`}
+            <Text style={[styles.bookBtnText, (!!error || isLoading) && { color: Colors.textMuted }]}>
+              {isBooking ? 'Booking...' : !!error ? 'Route Unavailable' : isLoading ? 'Calculating...' : `Book ${selected.icon} · ₹${displayFare}`}
             </Text>
-            {!error && <Text style={styles.bookBtnArrow}>→</Text>}
+            {!error && !isLoading && <Text style={styles.bookBtnArrow}>→</Text>}
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
