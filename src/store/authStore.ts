@@ -36,7 +36,7 @@ const DEV_ROLE: UserRole = 'rider'; // 👈 change to 'rider' to test rider flow
 
 const DEV_USER: User = {
   id: 'dev_001',
-  name: 'Arjun Sharma',
+  name: '', // 👈 empty name triggers RiderOnboardingScreen for testing
   phone: '+91 98765 43210',
   role: DEV_ROLE,
   rating: 4.9,
@@ -98,7 +98,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 3. Authenticate with GoNow backend
       const result = await authService.firebaseVerify(idToken, role);
-      const { accessToken, refreshToken, user } = result.data;
+      const { isNewUser, data } = result;
+      const { accessToken, refreshToken, user } = data;
 
       // Store tokens securely in AsyncStorage
       await AsyncStorage.multiSet([
@@ -108,12 +109,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       ]);
 
       // Map backend user to app User type
+      // NOTE: For a new user, user.name will be empty/undefined.
+      // RootNavigator checks: role === 'captain' && !user.name → shows CaptainOnboardingScreen
+      // This is how the routing to onboarding works — no extra flags needed.
       const appUser: User = {
         id: user._id,
-        name: user.name || '',
+        name: user.name || '',          // empty for new users → triggers onboarding
         phone: user.phone,
         role: user.role,
-        rating: user.rating || 5.0,
+        rating: user.rating || 0.0,
         totalRides: user.totalRides || 0,
       };
 
@@ -129,6 +133,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+
   /**
    * Restore session from AsyncStorage on app startup.
    */
@@ -141,6 +146,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const accessToken = token[1];
       const user = userJson[1] ? JSON.parse(userJson[1]) : null;
+
+      // Under DEV_BYPASS, pre-fill saved name if they completed onboarding once
+      if (DEV_BYPASS) {
+        if (user && user.name) {
+          set({ user: { ...DEV_USER, name: user.name } });
+        }
+        return true;
+      }
 
       if (accessToken && user) {
         const appUser: User = {

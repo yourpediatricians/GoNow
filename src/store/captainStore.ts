@@ -51,7 +51,7 @@ export const useCaptainStore = create<CaptainState>((set) => ({
   ],
   // ─────────────────────────────────────────────────────────────────────
   totalEarnings: 0,
-  acceptanceRate: 98,
+  acceptanceRate: 0,
   activeRideId: null,
   isLoading: false,
 
@@ -108,7 +108,7 @@ export const useCaptainStore = create<CaptainState>((set) => ({
         todayEarnings: d.todayEarnings || 0,
         todayRides: d.todayRides || 0,
         totalEarnings: d.totalEarnings || 0,
-        acceptanceRate: d.acceptanceRate || 100,
+        acceptanceRate: d.acceptanceRate || 0,
         weeklyEarnings: d.weeklyEarnings || [],
       });
     } catch {

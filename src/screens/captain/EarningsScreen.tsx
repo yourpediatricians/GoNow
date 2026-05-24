@@ -47,8 +47,14 @@ export const CaptainEarningsScreen: React.FC = () => {
     fetchEarnings();
   }, []);
 
-  const chartData = weeklyEarnings.length > 0 ? weeklyEarnings : WEEKLY_DATA;
+  const chartData = (weeklyEarnings.length > 0 ? weeklyEarnings : WEEKLY_DATA)
+    .map(d => ({
+      day:    (d as any).day ?? (d as any).date ?? '',  // backend returns 'date', local mock uses 'day'
+      amount: d.amount,
+      rides:  d.rides,
+    }));
   const maxAmount = Math.max(...chartData.map(d => d.amount), 1);
+
 
   const stats = period === 'today'
     ? { total: todayEarnings, rides: todayRides, hours: '-', avg: todayRides > 0 ? Math.round(todayEarnings / todayRides) : 0 }

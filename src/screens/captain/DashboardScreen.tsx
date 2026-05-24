@@ -10,6 +10,8 @@ import {
   Dimensions,
   Alert,
   TextInput,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useCaptainStore } from '../../store/captainStore';
@@ -34,7 +36,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     isOnline, toggleOnline, fetchEarnings,
     todayEarnings, todayRides, weeklyEarnings,
     incomingRequest, setIncomingRequest, isLoading,
-    activeRideId, setActiveRideId,
+    activeRideId, setActiveRideId, acceptanceRate,
   } = useCaptainStore();
   const { user } = useAuthStore();
 
@@ -129,26 +131,98 @@ export const CaptainDashboardScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [isOnline, activeRideId, activeRideDetails]);
 
-  const handleToggleOnline = useCallback(() => {
+  // Request location permission at runtime (required on Android 6+)
+  const requestLocationPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    try {
+      // First check if already granted
+      const alreadyGranted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      if (alreadyGranted) return true;
+
+      // Not yet granted — ask the user
+      const result = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location Permission',
+          message: 'GoNow needs your location to match you with nearby riders.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+
+      if (result === PermissionsAndroid.RESULTS.GRANTED) {
+        return true;
+      }
+
+      // User previously tapped "Don't ask again" or denied — send to Settings
+      Alert.alert(
+        'Location Permission Required',
+        'Please open Settings and enable Location permission for GoNow to go online.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => {
+              const { Linking } = require('react-native');
+              Linking.openSettings();
+            },
+          },
+        ]
+      );
+      return false;
+    } catch (err) {
+      console.warn('Permission request error:', err);
+      return false;
+    }
+  };
+
+  const handleToggleOnline = useCallback(async () => {
     if (isOnline) {
       toggleOnline(false).catch(err =>
         Alert.alert('Error', err?.response?.data?.message || 'Failed to go offline')
       );
-    } else {
-      Geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          toggleOnline(true, latitude, longitude).catch(err =>
-            Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
-          );
-        },
-        (error) => {
-          Alert.alert('Location Required', 'Please enable location to go online.');
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
+      return;
+    }
+
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) return;
+
+    // Helper: wraps getCurrentPosition in a Promise
+    const getPosition = (highAccuracy: boolean, timeoutMs: number): Promise<{latitude: number; longitude: number}> =>
+      new Promise((resolve, reject) => {
+        Geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          (err) => reject(err),
+          { enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge: 30000 }
+        );
+      });
+
+    try {
+      let coords: {latitude: number; longitude: number};
+
+      try {
+        // Attempt 1: Network/WiFi location — fast, works indoors (low accuracy but good enough)
+        coords = await getPosition(false, 8000);
+      } catch {
+        // Attempt 2: GPS — slower, needs clear sky view
+        coords = await getPosition(true, 15000);
+      }
+
+      toggleOnline(true, coords.latitude, coords.longitude).catch(err =>
+        Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
+      );
+    } catch (err) {
+      console.warn('Geolocation failed both attempts:', err);
+      Alert.alert(
+        'Location Unavailable',
+        'Could not get your location. Please make sure GPS or Wi-Fi is enabled and try again.',
+        [{ text: 'OK' }]
       );
     }
   }, [isOnline]);
+
 
   const handleVerifyOtp = async () => {
     if (!activeRideId || otpCode.length < 4 || isRideActionLoading) return;
@@ -417,7 +491,7 @@ export const CaptainDashboardScreen: React.FC = () => {
               </View>
               <View style={styles.earningsMetaDivider} />
               <View style={styles.earningsMetaItem}>
-                <Text style={styles.earningsMetaValue}>98%</Text>
+                <Text style={styles.earningsMetaValue}>{acceptanceRate}</Text>
                 <Text style={styles.earningsMetaLabel}>Acceptance</Text>
               </View>
             </View>

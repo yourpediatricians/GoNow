@@ -10,6 +10,7 @@ import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { PhoneEntryScreen } from '../screens/auth/PhoneEntryScreen';
 import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
 import { CaptainOnboardingScreen } from '../screens/auth/CaptainOnboardingScreen';
+import { RiderOnboardingScreen } from '../screens/auth/RiderOnboardingScreen';
 
 // Screens - Rider
 import { RiderHomeScreen } from '../screens/rider/HomeScreen';
@@ -21,6 +22,7 @@ import { RideSearchScreen } from '../screens/rider/RideSearchScreen';
 import { RideCompleteScreen } from '../screens/rider/RideCompleteScreen';
 import { WalletScreen } from '../screens/rider/WalletScreen';
 import { NotificationsScreen } from '../screens/rider/NotificationsScreen';
+import { SelectLocationScreen } from '../screens/rider/SelectLocationScreen';
 
 // Screens - Captain
 import { CaptainDashboardScreen } from '../screens/captain/DashboardScreen';
@@ -99,6 +101,7 @@ const RiderNavigator = () => (
     <RiderStack.Screen name="Booking" component={BookingScreen} options={{ animation: 'slide_from_bottom' }} />
     <RiderStack.Screen name="RideSearch" component={RideSearchScreen} options={{ animation: 'fade' }} />
     <RiderStack.Screen name="RideComplete" component={RideCompleteScreen} options={{ animation: 'slide_from_bottom' }} />
+    <RiderStack.Screen name="SelectLocation" component={SelectLocationScreen} options={{ animation: 'slide_from_right' }} />
   </RiderStack.Navigator>
 );
 
@@ -148,14 +151,16 @@ export const RootNavigator = () => {
   return (
     <NavigationContainer>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
+        {!isAuthenticated || !user ? (
           <RootStack.Screen name="Auth" component={AuthNavigator} />
-        ) : user?.role === 'captain' ? (
-          !user?.name ? (
+        ) : user.role === 'captain' ? (
+          !user.name ? (
             <RootStack.Screen name="CaptainOnboarding" component={CaptainOnboardingScreen} />
           ) : (
             <RootStack.Screen name="Captain" component={CaptainTabNavigator} />
           )
+        ) : !user.name ? (
+          <RootStack.Screen name="RiderOnboarding" component={RiderOnboardingScreen} />
         ) : (
           <RootStack.Screen name="Rider" component={RiderNavigator} />
         )}

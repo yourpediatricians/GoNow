@@ -14,6 +14,9 @@ interface RideState {
   estimatedDuration: number;
   isSurge: boolean;
   availableCaptains: number;
+  estimatedFares: Record<string, number>;
+  estimatedDurations: Record<string, number>;
+  availableCaptainsMap: Record<string, number>;
 
   // Active ride
   rideStatus: RideStatus;
@@ -60,6 +63,9 @@ export const useRideStore = create<RideState>((set, get) => ({
   estimatedDuration: 0,
   isSurge: false,
   availableCaptains: 0,
+  estimatedFares: {},
+  estimatedDurations: {},
+  availableCaptainsMap: {},
   rideStatus: 'idle',
   activeRide: null,
   activeRideId: null,
@@ -91,6 +97,9 @@ export const useRideStore = create<RideState>((set, get) => ({
       estimatedDuration: 0,
       isSurge: false,
       availableCaptains: 0,
+      estimatedFares: {},
+      estimatedDurations: {},
+      availableCaptainsMap: {},
       rideStatus: 'idle',
       activeRide: null,
       activeRideId: null,
@@ -100,25 +109,54 @@ export const useRideStore = create<RideState>((set, get) => ({
     }),
 
   /**
-   * Fetch fare estimate from backend. Call after selecting pickup, dropoff, rideType.
+   * Fetch fare estimates from backend for all ride types in parallel.
    */
   fetchEstimate: async () => {
-    const { pickup, dropoff, selectedRideType } = get();
-    if (!pickup || !dropoff || !selectedRideType) return;
+    const { pickup, dropoff } = get();
+    if (!pickup || !dropoff) return;
 
     set({ isLoading: true, error: null });
     try {
-      const result = await rideService.getEstimate(
-        { latitude: pickup.latitude, longitude: pickup.longitude, address: pickup.address, name: pickup.name },
-        { latitude: dropoff.latitude, longitude: dropoff.longitude, address: dropoff.address, name: dropoff.name },
-        selectedRideType
+      const types: RideType[] = ['bike', 'auto', 'cab'];
+      const promises = types.map(type =>
+        rideService.getEstimate(
+          { latitude: pickup.latitude, longitude: pickup.longitude, address: pickup.address, name: pickup.name },
+          { latitude: dropoff.latitude, longitude: dropoff.longitude, address: dropoff.address, name: dropoff.name },
+          type
+        )
       );
+
+      const results = await Promise.all(promises);
+
+      const faresObj: Record<string, number> = {};
+      const durationsObj: Record<string, number> = {};
+      const captainsObj: Record<string, number> = {};
+      let distance = 0;
+      let surge = false;
+
+      results.forEach((res, index) => {
+        const type = types[index];
+        faresObj[type] = res.data.fare;
+        durationsObj[type] = res.data.duration;
+        captainsObj[type] = res.data.availableCaptains;
+        if (index === 0) {
+          distance = res.data.distance;
+          surge = res.data.isSurge;
+        }
+      });
+
+      const currentSelected = get().selectedRideType || 'auto';
+
       set({
-        estimatedFare: result.data.fare,
-        estimatedDistance: result.data.distance,
-        estimatedDuration: result.data.duration,
-        isSurge: result.data.isSurge,
-        availableCaptains: result.data.availableCaptains,
+        estimatedFares: faresObj,
+        estimatedDurations: durationsObj,
+        availableCaptainsMap: captainsObj,
+        estimatedDistance: distance,
+        isSurge: surge,
+        // Keep active selection in sync for backward compatibility
+        estimatedFare: faresObj[currentSelected] || 0,
+        estimatedDuration: durationsObj[currentSelected] || 0,
+        availableCaptains: captainsObj[currentSelected] || 0,
       });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to get estimate' });

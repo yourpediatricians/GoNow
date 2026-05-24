@@ -103,10 +103,23 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
     }
   };
 
-  const handleGoLive = () => {
-    // Reactive update -> triggers RootNavigator to switch to CaptainTabNavigator
+  const handleGoLive = async () => {
+    // 1. Update in-memory store → RootNavigator re-renders and shows CaptainTabNavigator
     useAuthStore.getState().updateProfile({ name });
+
+    // 2. Persist name into AsyncStorage so on next app launch
+    //    loadFromStorage restores an appUser with a name, skipping onboarding.
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const { STORAGE_KEYS } = await import('../../services/api');
+      const existing = await AsyncStorage.getItem(STORAGE_KEYS.USER);
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({ ...parsed, name }));
+      }
+    } catch (_) { /* silently ignore */ }
   };
+
 
   const handleClose = () => {
     Alert.alert(

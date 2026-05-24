@@ -7,7 +7,7 @@ export const authService = {
    */
   firebaseVerify: async (idToken: string, role: UserRole) => {
     const { data } = await api.post('/auth/firebase-verify', { idToken, role });
-    return data; // { success, isProfileComplete, data: { accessToken, refreshToken, user } }
+    return data; // { success, isNewUser, data: { accessToken, refreshToken, user } }
   },
 
   /**

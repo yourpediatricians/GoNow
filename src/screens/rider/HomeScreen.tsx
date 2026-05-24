@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,11 @@ import {
   StatusBar,
   Dimensions,
   Animated,
+  PermissionsAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -33,10 +37,10 @@ const DARK_MAP_STYLE = [
 ];
 
 const QUICK_DESTINATIONS = [
-  { id: '1', icon: '🏠', label: 'Home', address: 'Koramangala, Bengaluru' },
-  { id: '2', icon: '💼', label: 'Office', address: 'Whitefield, Bengaluru' },
-  { id: '3', icon: '🛒', label: 'Mall', address: 'Phoenix Mall, Whitefield' },
-  { id: '4', icon: '✈️', label: 'Airport', address: 'KIAL, Devanahalli' },
+  { id: '1', icon: '🏠', label: 'Home', address: 'Koramangala, Bengaluru', latitude: 12.9352, longitude: 77.6245 },
+  { id: '2', icon: '💼', label: 'Office', address: 'Whitefield, Bengaluru', latitude: 12.9698, longitude: 77.7500 },
+  { id: '3', icon: '🛒', label: 'Mall', address: 'Phoenix Mall, Whitefield, Bengaluru', latitude: 12.9960, longitude: 77.6960 },
+  { id: '4', icon: '✈️', label: 'Airport', address: 'Kempegowda Int\'l Airport, Bengaluru', latitude: 13.1986, longitude: 77.7066 },
 ];
 
 const RIDE_TYPES = [
@@ -49,21 +53,100 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { user } = useAuthStore();
   const { setPickup, setDropoff } = useRideStore();
   const [selectedRide, setSelectedRide] = useState('bike');
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const bottomSheetY = useRef(new Animated.Value(0)).current;
 
-  const handleBook = () => {
+  // Request location permission & get current location on mount
+  useEffect(() => {
+    const requestLocation = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          const alreadyGranted = await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+          if (!alreadyGranted) {
+            const granted = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+              {
+                title: 'Location Permission',
+                message: 'GoNow needs location access to set your pickup location.',
+                buttonPositive: 'Allow',
+                buttonNegative: 'Deny',
+              }
+            );
+            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Location permission check error:', err);
+        }
+      }
+
+      Geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const loc = {
+            latitude: lat,
+            longitude: lng,
+            address: 'Current Location (GPS)',
+            name: 'My Location',
+          };
+          setPickup(loc); // pre-fill pickup in store
+        },
+        (err) => console.log('Rider location error:', err),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+      );
+    };
+
+    requestLocation();
+  }, []);
+
+  const handleSearchDropoff = () => {
+    navigation.navigate('SelectLocation', { type: 'dropoff' });
+  };
+
+  const handleQuickDest = (dest: any) => {
+    const { pickup } = useRideStore.getState();
+    const activePickup = pickup || {
+      latitude: 12.9716,
+      longitude: 77.5946,
+      address: 'Current Location (GPS)',
+      name: 'My Location',
+    };
+    
+    setPickup(activePickup);
+    const dropoffLoc = {
+      latitude: dest.latitude,
+      longitude: dest.longitude,
+      address: dest.address,
+      name: dest.label,
+    };
+    setDropoff(dropoffLoc);
+
     navigation.navigate('Booking', {
-      pickup: { latitude: 12.9716, longitude: 77.5946, address: 'Koramangala 5th Block, Bengaluru', name: 'Koramangala' },
-      dropoff: { latitude: 12.958, longitude: 77.585, address: 'MG Road Metro Station, Bengaluru', name: 'MG Road' },
+      pickup: activePickup,
+      dropoff: dropoffLoc,
     });
   };
 
-  const INITIAL_REGION = {
-    latitude: 12.9716,
-    longitude: 77.5946,
-    latitudeDelta: 0.02,
-    longitudeDelta: 0.02,
+  const handleBookNow = () => {
+    const { pickup, dropoff } = useRideStore.getState();
+    if (!dropoff) {
+      handleSearchDropoff();
+      return;
+    }
+    const activePickup = pickup || {
+      latitude: 12.9716,
+      longitude: 77.5946,
+      address: 'Current Location (GPS)',
+      name: 'My Location',
+    };
+    navigation.navigate('Booking', {
+      pickup: activePickup,
+      dropoff,
+    });
   };
 
   const greeting = () => {
@@ -114,7 +197,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
         {/* Where to? */}
-        <TouchableOpacity style={styles.searchBar} activeOpacity={0.85} onPress={handleBook}>
+        <TouchableOpacity style={styles.searchBar} activeOpacity={0.85} onPress={handleSearchDropoff}>
           <View style={styles.searchDot} />
           <Text style={styles.searchPlaceholder}>Where do you want to go?</Text>
           <View style={styles.searchArrow}>
@@ -128,7 +211,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.quickRow}>
           {QUICK_DESTINATIONS.map(dest => (
-            <TouchableOpacity key={dest.id} style={styles.quickChip}>
+            <TouchableOpacity key={dest.id} style={styles.quickChip} onPress={() => handleQuickDest(dest)}>
               <Text style={styles.quickIcon}>{dest.icon}</Text>
               <Text style={styles.quickLabel}>{dest.label}</Text>
             </TouchableOpacity>
@@ -170,7 +253,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
         </View>
 
         {/* Book button */}
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9} onPress={handleBook}>
+        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9} onPress={handleBookNow}>
           <LinearGradient
             colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
             start={{ x: 0, y: 0 }}

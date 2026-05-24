@@ -10,15 +10,16 @@
  */
 
 // ── Dev (local backend) ────────────────────────────────────────────────────────
-// const DEV_BASE_URL = 'http://10.65.63.38:5000/api';
-// const DEV_SOCKET_URL = 'http://10.65.63.38:5000';
+const DEV_BASE_URL = 'http://10.79.10.38:5000/api';
+const DEV_SOCKET_URL = 'http://10.79.10.38:5000';
 
 import { Platform } from 'react-native';
 
 // — Dev (local backend) ———————————————————
-const DEV_HOST = 'localhost';
-const DEV_BASE_URL = `http://${DEV_HOST}:5001/api`;
-const DEV_SOCKET_URL = `http://${DEV_HOST}:5001`;
+const DEV_HOST = '10.79.10.243';
+const PORT = '5000';
+// const DEV_BASE_URL = `http://${DEV_HOST}:${PORT}/api`;
+// const DEV_SOCKET_URL = `http://${DEV_HOST}:${PORT}`;
 
 // ── Production (replace with your deployed URL) ────────────────────────────────
 const PROD_BASE_URL = 'https://api.gonow.app/api'; // 👈 change this when deploying
@@ -32,3 +33,6 @@ export const SOCKET_URL = IS_DEV ? DEV_SOCKET_URL : PROD_SOCKET_URL;
 
 // API timeout in milliseconds
 export const API_TIMEOUT = 15000;
+
+// Google Maps API Key placeholder (replace with your actual key for autocomplete)
+export const GOOGLE_MAPS_API_KEY = 'AIzaSyBPdowXJwFfcybbHYp8O30_xFh26OHVlbc';

@@ -36,9 +36,7 @@ const RIDE_OPTIONS = [
     icon: '🏍️',
     label: 'Bike',
     desc: 'Fastest for solo',
-    price: 38,
     surgePrice: null,
-    eta: 2,
     capacity: 1,
   },
   {
@@ -46,9 +44,7 @@ const RIDE_OPTIONS = [
     icon: '🛺',
     label: 'Auto',
     desc: 'Affordable comfort',
-    price: 92,
     surgePrice: null,
-    eta: 5,
     capacity: 3,
   },
   {
@@ -56,20 +52,8 @@ const RIDE_OPTIONS = [
     icon: '🚗',
     label: 'Cab',
     desc: 'AC • Premium ride',
-    price: 185,
     surgePrice: 210,
-    eta: 8,
     capacity: 4,
-  },
-  {
-    id: 'cab_xl',
-    icon: '🚐',
-    label: 'Cab XL',
-    desc: 'For groups',
-    price: 260,
-    surgePrice: null,
-    eta: 12,
-    capacity: 6,
   },
 ];
 
@@ -86,28 +70,34 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   const slideAnim = useRef(new Animated.Value(height)).current;
 
   const {
-    setPickup, setDropoff, setSelectedRideType, setPaymentMethod,
+    pickup, dropoff, setPickup, setDropoff, setSelectedRideType, setPaymentMethod,
     fetchEstimate, requestRide,
     estimatedFare, estimatedDistance, estimatedDuration, isSurge, availableCaptains,
+    estimatedFares, estimatedDurations, availableCaptainsMap,
     isLoading,
+    error,
   } = useRideStore();
 
-  // Hydrate store with route params
+  // Hydrate store on mount if params are passed
   useEffect(() => {
-    setPickup(route.params.pickup);
-    setDropoff(route.params.dropoff);
-  }, []);
+    if (route.params?.pickup) setPickup(route.params.pickup);
+    if (route.params?.dropoff) setDropoff(route.params.dropoff);
+  }, [route.params]);
 
-  // Fetch estimate whenever ride type changes
+  // Fetch estimate whenever ride type, payment, or locations change
   useEffect(() => {
     setSelectedRideType(selectedRide);
     setPaymentMethod(selectedPayment);
-    // Delay slightly so store updates propagate
-    const timer = setTimeout(() => {
-      fetchEstimate().catch(() => {});
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [selectedRide]);
+    if (pickup && dropoff) {
+      const timer = setTimeout(() => {
+        fetchEstimate().catch((err: any) => {
+          const msg = err?.response?.data?.message || err?.message || 'Failed to calculate estimate';
+          Alert.alert('Route Unavailable', msg);
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedRide, selectedPayment, pickup, dropoff]);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -117,6 +107,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  const handleEditLocation = (type: 'pickup' | 'dropoff') => {
+    navigation.navigate('SelectLocation', { type });
+  };
 
   const handleBook = async () => {
     if (!availableCaptains && availableCaptains === 0) {
@@ -138,9 +132,9 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const selected = RIDE_OPTIONS.find(r => r.id === selectedRide)!;
-  const displayFare = estimatedFare || selected.price;
+  const displayFare = estimatedFares[selectedRide];
   const displayDistance = estimatedDistance || 0;
-  const displayDuration = estimatedDuration || selected.eta;
+  const displayDuration = estimatedDurations[selectedRide];
 
   return (
     <View style={styles.container}>
@@ -166,28 +160,38 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
       <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
       {/* Route summary */}
         <View style={styles.routeCard}>
-          <View style={styles.routeRow}>
+          <TouchableOpacity style={styles.routeRow} onPress={() => handleEditLocation('pickup')} activeOpacity={0.7}>
             <View style={styles.routeDotPickup} />
             <Text style={styles.routeText} numberOfLines={1}>
-              {route.params.pickup.address}
+              {pickup?.address || 'Loading pickup location...'}
             </Text>
-          </View>
+            <Text style={styles.editArrow}>✏️</Text>
+          </TouchableOpacity>
           <View style={styles.routeDivider} />
-          <View style={styles.routeRow}>
+          <TouchableOpacity style={styles.routeRow} onPress={() => handleEditLocation('dropoff')} activeOpacity={0.7}>
             <View style={styles.routeDotDrop} />
             <Text style={styles.routeText} numberOfLines={1}>
-              {route.params.dropoff.address}
+              {dropoff?.address || 'Loading dropoff location...'}
             </Text>
-          </View>
+            <Text style={styles.editArrow}>✏️</Text>
+          </TouchableOpacity>
           <View style={styles.routeMeta}>
-            <Text style={styles.routeMetaText}>
-              📏 {displayDistance > 0 ? `${displayDistance} km` : 'Calculating...'}
-            </Text>
-            <Text style={styles.routeMetaText}>
-              ⏱ ~{displayDuration} min
-            </Text>
-            {availableCaptains > 0 && (
-              <Text style={styles.routeMetaText}>🚗 {availableCaptains} nearby</Text>
+            {error ? (
+              <Text style={[styles.routeMetaText, { color: Colors.error, fontWeight: FontWeight.bold }]}>
+                ⚠️ {error}
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.routeMetaText}>
+                  📏 {displayDistance > 0 ? `${displayDistance} km` : 'Calculating...'}
+                </Text>
+                <Text style={styles.routeMetaText}>
+                  ⏱ ~{displayDuration} min
+                </Text>
+                {availableCaptains > 0 && (
+                  <Text style={styles.routeMetaText}>🚗 {availableCaptains} nearby</Text>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -198,34 +202,39 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.rideRow}>
-          {RIDE_OPTIONS.filter(r => r.id !== 'cab_xl').map(ride => (
-            <TouchableOpacity
-              key={ride.id}
-              style={[styles.rideCard, selectedRide === ride.id && styles.rideCardActive]}
-              onPress={() => setSelectedRide(ride.id as RideType)}>
-              {selectedRide === ride.id && (
-                <LinearGradient
-                  colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
-                  style={StyleSheet.absoluteFill}
-                  borderRadius={BorderRadius.md}
-                />
-              )}
-              <Text style={styles.rideIcon}>{ride.icon}</Text>
-              <Text style={[styles.rideLabel, selectedRide === ride.id && styles.rideLabelActive]}>
-                {ride.label}
-              </Text>
-              <Text style={styles.rideDesc}>{ride.desc}</Text>
-              <View style={styles.ridePriceRow}>
-                {isSurge && selectedRide === ride.id && (
-                  <Text style={styles.rideSurge}>Surge</Text>
+          {RIDE_OPTIONS.filter(r => r.id !== 'cab_xl').map(ride => {
+            const dynamicFare = estimatedFares[ride.id];
+            const dynamicDuration = estimatedDurations[ride.id];
+
+            return (
+              <TouchableOpacity
+                key={ride.id}
+                style={[styles.rideCard, selectedRide === ride.id && styles.rideCardActive]}
+                onPress={() => setSelectedRide(ride.id as RideType)}>
+                {selectedRide === ride.id && (
+                  <LinearGradient
+                    colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
+                    style={StyleSheet.absoluteFill}
+                    borderRadius={BorderRadius.md}
+                  />
                 )}
-                <Text style={styles.ridePrice}>
-                  {isLoading && selectedRide === ride.id ? '...' : `₹${selectedRide === ride.id ? displayFare : ride.price}`}
+                <Text style={styles.rideIcon}>{ride.icon}</Text>
+                <Text style={[styles.rideLabel, selectedRide === ride.id && styles.rideLabelActive]}>
+                  {ride.label}
                 </Text>
-              </View>
-              <Text style={styles.rideEta}>{ride.eta} min</Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={styles.rideDesc}>{ride.desc}</Text>
+                <View style={styles.ridePriceRow}>
+                  {isSurge && selectedRide === ride.id && (
+                    <Text style={styles.rideSurge}>Surge</Text>
+                  )}
+                  <Text style={styles.ridePrice}>
+                    {isLoading ? '...' : dynamicFare ? `₹${dynamicFare}` : `₹ -`}
+                  </Text>
+                </View>
+                <Text style={styles.rideEta}>{dynamicDuration || '-'} min</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Payment selector */}
@@ -248,17 +257,17 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
         <TouchableOpacity
           style={styles.bookBtn}
           activeOpacity={0.9}
-          disabled={isBooking || isLoading}
+          disabled={isBooking || isLoading || !!error}
           onPress={handleBook}>
           <LinearGradient
-            colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
+            colors={!!error ? [Colors.surfaceElevated, Colors.surfaceBorder] : [Colors.primaryLight, Colors.primary, Colors.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.bookBtnGrad}>
-            <Text style={styles.bookBtnText}>
-              {isBooking ? 'Booking...' : `Book ${selected.icon} · ₹${displayFare}`}
+            <Text style={[styles.bookBtnText, !!error && { color: Colors.textMuted }]}>
+              {isBooking ? 'Booking...' : !!error ? 'Route Unavailable' : `Book ${selected.icon} · ₹${displayFare}`}
             </Text>
-            <Text style={styles.bookBtnArrow}>→</Text>
+            {!error && <Text style={styles.bookBtnArrow}>→</Text>}
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -359,6 +368,7 @@ const styles = StyleSheet.create({
   },
   bookBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
   bookBtnArrow: { fontSize: FontSize.lg, color: Colors.white },
+  editArrow: { fontSize: FontSize.xs, color: Colors.textMuted, marginLeft: Spacing.sm },
   pickupPin: {
     width: 20, height: 20, borderRadius: 10,
     backgroundColor: 'rgba(255,90,31,0.3)',
