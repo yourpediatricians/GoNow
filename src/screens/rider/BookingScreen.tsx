@@ -64,7 +64,9 @@ const PAYMENT_METHODS = [
 ];
 
 export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
-  const [selectedRide, setSelectedRide] = useState<RideType>('auto');
+  const [selectedRide, setSelectedRide] = useState<RideType>(
+    route.params?.preSelectedRide || 'auto'
+  );
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [isBooking, setIsBooking] = useState(false);
   const slideAnim = useRef(new Animated.Value(height)).current;
@@ -82,6 +84,9 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   useEffect(() => {
     if (route.params?.pickup) setPickup(route.params.pickup);
     if (route.params?.dropoff) setDropoff(route.params.dropoff);
+    if (route.params?.preSelectedRide) {
+      setSelectedRide(route.params.preSelectedRide);
+    }
   }, [route.params]);
 
   // Fetch estimate whenever ride type, payment, or locations change

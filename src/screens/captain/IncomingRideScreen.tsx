@@ -19,7 +19,8 @@ interface IncomingRideProps {
 
 export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onReject }) => {
   const { incomingRequest, setIncomingRequest, setActiveRideId } = useCaptainStore();
-  const [countdown, setCountdown] = useState(ACCEPTANCE_TIMEOUT);
+  const requestTimeout = incomingRequest?.timeoutSec || 10;
+  const [countdown, setCountdown] = useState(requestTimeout);
   const [isProcessing, setIsProcessing] = useState(false);
   const slideAnim = useRef(new Animated.Value(height)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
@@ -27,7 +28,7 @@ export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onRe
 
   useEffect(() => {
     Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 10, useNativeDriver: true }).start();
-    Animated.timing(progressAnim, { toValue: 0, duration: ACCEPTANCE_TIMEOUT * 1000, useNativeDriver: false }).start();
+    Animated.timing(progressAnim, { toValue: 0, duration: requestTimeout * 1000, useNativeDriver: false }).start();
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.05, duration: 500, useNativeDriver: true }),
@@ -50,11 +51,12 @@ export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onRe
   }, []);
 
   const handleAccept = async () => {
-    if (!incomingRequest?.id || isProcessing) return;
+    const rideId = incomingRequest?.id || (incomingRequest as any)?.rideId;
+    if (!rideId || isProcessing) return;
     setIsProcessing(true);
     try {
-      await rideService.acceptRide(incomingRequest.id);
-      setActiveRideId(incomingRequest.id);
+      await rideService.acceptRide(rideId);
+      setActiveRideId(rideId);
       setIncomingRequest(null);
       onAccept?.();
     } catch (err: any) {
@@ -67,9 +69,10 @@ export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onRe
   };
 
   const handleReject = async (reason = 'Captain declined') => {
-    if (!incomingRequest?.id || isProcessing) return;
+    const rideId = incomingRequest?.id || (incomingRequest as any)?.rideId;
+    if (!rideId || isProcessing) return;
     try {
-      await rideService.rejectRide(incomingRequest.id, reason);
+      await rideService.rejectRide(rideId, reason);
     } catch {} finally {
       setIncomingRequest(null);
       onReject?.();

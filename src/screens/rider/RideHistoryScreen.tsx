@@ -11,6 +11,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { useRideStore } from '../../store/rideStore';
+import { RideHistory } from '../../types';
 
 const MOCK_HISTORY = [
   {
@@ -97,22 +98,58 @@ export const RideHistoryScreen: React.FC = () => {
 
   const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      
+      const now = new Date();
+      const isToday = d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+      
+      const isYesterday = new Date(now.getTime() - 86400000).getDate() === d.getDate() &&
+        new Date(now.getTime() - 86400000).getMonth() === d.getMonth() &&
+        new Date(now.getTime() - 86400000).getFullYear() === d.getFullYear();
+
+      const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      
+      if (isToday) {
+        return `Today, ${timeStr}`;
+      } else if (isYesterday) {
+        return `Yesterday, ${timeStr}`;
+      } else {
+        return d.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+    } catch {
+      return dateStr;
+    }
+  };
+
   const filtered = rideHistory.filter(
     r => filter === 'all' || r.status === filter,
   );
 
+  const completedCount = rideHistory.filter(r => r.status === 'completed').length;
+  const cancelledCount = rideHistory.filter(r => r.status === 'cancelled').length;
+
   const totalSpent = rideHistory.filter(r => r.status === 'completed')
     .reduce((sum, r) => sum + r.fare, 0);
 
-  const renderItem = ({ item }: { item: typeof MOCK_HISTORY[0] }) => (
+  const renderItem = ({ item }: { item: RideHistory }) => (
     <TouchableOpacity style={styles.card} activeOpacity={0.85}>
       <View style={styles.cardTop}>
         <View style={[styles.typeIcon, item.status === 'cancelled' && styles.cancelledIcon]}>
-          <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+          <Text style={{ fontSize: 22 }}>{rideIcons[item.rideType] || '🚗'}</Text>
         </View>
         <View style={styles.cardMain}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardDate}>{item.date}</Text>
+            <Text style={styles.cardDate}>{formatDate(item.date)}</Text>
             <View style={[styles.statusBadge, item.status === 'cancelled' && styles.cancelledBadge]}>
               <Text style={[styles.statusText, item.status === 'cancelled' && styles.cancelledText]}>
                 {item.status === 'completed' ? '✓ Done' : '✕ Cancelled'}
@@ -127,8 +164,8 @@ export const RideHistoryScreen: React.FC = () => {
               <View style={styles.dotDrop} />
             </View>
             <View style={styles.routeAddresses}>
-              <Text style={styles.routeFrom} numberOfLines={1}>{item.from}</Text>
-              <Text style={styles.routeTo} numberOfLines={1}>{item.to}</Text>
+              <Text style={styles.routeFrom} numberOfLines={1}>{item.pickup?.name || item.pickup?.address || 'Pickup Location'}</Text>
+              <Text style={styles.routeTo} numberOfLines={1}>{item.dropoff?.name || item.dropoff?.address || 'Dropoff Location'}</Text>
             </View>
           </View>
         </View>
@@ -137,12 +174,12 @@ export const RideHistoryScreen: React.FC = () => {
       {item.status === 'completed' && (
         <View style={styles.cardBottom}>
           <View style={styles.metaRow}>
-            <Text style={styles.metaItem}>📏 {item.distance}</Text>
-            <Text style={styles.metaItem}>⏱ {item.duration}</Text>
-            {item.captain && <Text style={styles.metaItem}>👤 {item.captain}</Text>}
+            <Text style={styles.metaItem}>📏 {typeof item.distance === 'number' ? `${item.distance.toFixed(1)} km` : '—'}</Text>
+            <Text style={styles.metaItem}>⏱ {item.duration ? `${Math.round(item.duration)} min` : '—'}</Text>
+            {item.captain?.name && <Text style={styles.metaItem}>👤 {item.captain.name}</Text>}
           </View>
           <View style={styles.fareRow}>
-            {item.rating && (
+            {typeof item.rating === 'number' && item.rating > 0 && (
               <View style={styles.ratingRow}>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Text key={i} style={[styles.star, i < item.rating! && styles.starFilled]}>★</Text>
@@ -167,7 +204,7 @@ export const RideHistoryScreen: React.FC = () => {
         {/* Summary */}
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{MOCK_HISTORY.filter(r => r.status === 'completed').length}</Text>
+            <Text style={styles.summaryValue}>{completedCount}</Text>
             <Text style={styles.summaryLabel}>Completed</Text>
           </View>
           <View style={[styles.summaryCard, styles.summaryCardAccent]}>
@@ -175,7 +212,7 @@ export const RideHistoryScreen: React.FC = () => {
             <Text style={styles.summaryLabel}>Total Spent</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{MOCK_HISTORY.filter(r => r.status === 'cancelled').length}</Text>
+            <Text style={styles.summaryValue}>{cancelledCount}</Text>
             <Text style={styles.summaryLabel}>Cancelled</Text>
           </View>
         </View>
@@ -202,13 +239,24 @@ export const RideHistoryScreen: React.FC = () => {
         </View>
       </View>
 
-      <FlatList
-        data={filtered}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 }}>
+              <Text style={{ color: Colors.textMuted, fontSize: FontSize.sm }}>No rides found</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };

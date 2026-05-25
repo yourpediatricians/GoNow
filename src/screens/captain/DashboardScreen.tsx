@@ -93,12 +93,21 @@ export const CaptainDashboardScreen: React.FC = () => {
       }
     };
 
+    const rideTimeoutHandler = (data: any) => {
+      const currentReq = useCaptainStore.getState().incomingRequest;
+      if (currentReq && currentReq.id === data.rideId) {
+        setIncomingRequest(null);
+      }
+    };
+
     socket.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
     socket.on(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+    socket.on(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
 
     return () => {
       socket.off(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
       socket.off(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+      socket.off(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
     };
   }, [activeRideId]);
 

@@ -31,7 +31,7 @@ let confirmationResult: any = null;
 // ─── DEV BYPASS ───────────────────────────────────────────────────────────────
 // Set to true to skip Firebase auth and go straight to the app.
 // Change `role` to 'rider' or 'captain' to test different flows.
-const DEV_BYPASS = true;
+const DEV_BYPASS = false;
 const DEV_ROLE: UserRole = 'rider'; // 👈 change to 'rider' to test rider flow
 
 const DEV_USER: User = {
@@ -45,8 +45,8 @@ const DEV_USER: User = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: DEV_BYPASS ? DEV_USER : null,
-  isAuthenticated: DEV_BYPASS,
+  user: null,
+  isAuthenticated: false,
   isLoading: false,
   token: null,
 
@@ -121,10 +121,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         totalRides: user.totalRides || 0,
       };
 
-      set({ user: appUser, isAuthenticated: true, token: accessToken });
+      set({ user: appUser, token: accessToken });
 
       // Connect Socket.io after login
-      await connectSocket();
+      await connectSocket().catch(() => {});
+      set({ isAuthenticated: true });
     } catch (err: any) {
       console.error('Firebase verifyOtp error:', err);
       throw err;
@@ -149,9 +150,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Under DEV_BYPASS, pre-fill saved name if they completed onboarding once
       if (DEV_BYPASS) {
-        if (user && user.name) {
-          set({ user: { ...DEV_USER, name: user.name } });
-        }
+        const restoredUser = user && user.name ? { ...DEV_USER, name: user.name } : DEV_USER;
+        set({ user: restoredUser, token: accessToken });
+        await connectSocket().catch(() => {});
+        set({ isAuthenticated: true });
         return true;
       }
 
@@ -165,10 +167,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           totalRides: user.totalRides || 0,
         };
 
-        set({ user: appUser, isAuthenticated: true, token: accessToken });
+        set({ user: appUser, token: accessToken });
 
         // Reconnect socket
-        await connectSocket();
+        await connectSocket().catch(() => {});
+        set({ isAuthenticated: true });
         return true;
       }
       return false;

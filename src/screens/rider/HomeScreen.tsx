@@ -43,18 +43,64 @@ const QUICK_DESTINATIONS = [
   { id: '4', icon: '✈️', label: 'Airport', address: 'Kempegowda Int\'l Airport, Bengaluru', latitude: 13.1986, longitude: 77.7066 },
 ];
 
-const RIDE_TYPES = [
-  { id: 'bike', icon: '🏍️', label: 'Bike', price: '₹25', eta: '2 min' },
-  { id: 'auto', icon: '🛺', label: 'Auto', price: '₹60', eta: '4 min' },
-  { id: 'cab', icon: '🚗', label: 'Cab', price: '₹120', eta: '7 min' },
+const SERVICES = [
+  {
+    id: 'bike',
+    icon: '🏍️',
+    title: 'Moto',
+    desc: 'Fast, solo rides',
+    eta: '2 min away',
+    rate: 'From ₹9/km',
+  },
+  {
+    id: 'auto',
+    icon: '🛺',
+    title: 'Auto',
+    desc: 'Doorstep pick-up',
+    eta: '4 min away',
+    rate: 'From ₹13/km',
+  },
+  {
+    id: 'cab',
+    icon: '🚗',
+    title: 'Cab',
+    desc: 'Comfy AC rides',
+    eta: '5 min away',
+    rate: 'From ₹18/km',
+  },
+];
+
+const BANNERS = [
+  {
+    id: 'b1',
+    emoji: '⚡',
+    title: '50% Off Moto Rides',
+    desc: 'Use code MOTO50 on first 3 solo rides.',
+    bg: ['#2E1000', '#1F0B00'],
+    borderColor: 'rgba(255,90,31,0.2)',
+  },
+  {
+    id: 'b2',
+    emoji: '🛡️',
+    title: 'Safety First',
+    desc: 'Verified captains. Clean helmet provided.',
+    bg: ['#0A2E1A', '#061F11'],
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  {
+    id: 'b3',
+    emoji: '🌱',
+    title: 'Go Green with GoNow',
+    desc: 'Beat city traffic and reduce emissions.',
+    bg: ['#0A1A2E', '#06111F'],
+    borderColor: 'rgba(59,130,246,0.2)',
+  },
 ];
 
 export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { user } = useAuthStore();
   const { setPickup, setDropoff } = useRideStore();
-  const [selectedRide, setSelectedRide] = useState('bike');
   const mapRef = useRef<any>(null);
-  const bottomSheetY = useRef(new Animated.Value(0)).current;
 
   // Request location permission & get current location on mount
   useEffect(() => {
@@ -107,6 +153,13 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
     navigation.navigate('SelectLocation', { type: 'dropoff' });
   };
 
+  const handleSelectService = (serviceId: string) => {
+    navigation.navigate('SelectLocation', {
+      type: 'dropoff',
+      preSelectedRide: serviceId,
+    });
+  };
+
   const handleQuickDest = (dest: any) => {
     const { pickup } = useRideStore.getState();
     const activePickup = pickup || {
@@ -131,24 +184,6 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
     });
   };
 
-  const handleBookNow = () => {
-    const { pickup, dropoff } = useRideStore.getState();
-    if (!dropoff) {
-      handleSearchDropoff();
-      return;
-    }
-    const activePickup = pickup || {
-      latitude: 12.9716,
-      longitude: 77.5946,
-      address: 'Current Location (GPS)',
-      name: 'My Location',
-    };
-    navigation.navigate('Booking', {
-      pickup: activePickup,
-      dropoff,
-    });
-  };
-
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
@@ -163,7 +198,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       {/* Map */}
       <DummyMap style={styles.map}>
         {/* Pins rendered inside dummy map */}
-        <View style={[styles.myLocationPin, { position: 'absolute', top: '35%', left: '38%' }]}>
+        <View style={[styles.myLocationPin, { position: 'absolute', top: '30%', left: '38%' }]}>
           <View style={styles.myLocationDot} />
         </View>
       </DummyMap>
@@ -179,7 +214,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
             <Text style={styles.greeting}>{greeting()},</Text>
             <Text style={styles.userName}>{user?.name?.split(' ')[0]} 👋</Text>
           </View>
-          <TouchableOpacity style={styles.profileBtn}>
+          <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
                 {user?.name?.charAt(0) || 'U'}
@@ -218,51 +253,57 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
           ))}
         </ScrollView>
 
-        {/* Ride type selector */}
-        <View style={styles.rideTypes}>
-          <Text style={styles.sectionLabel}>Choose ride</Text>
-          <View style={styles.rideRow}>
-            {RIDE_TYPES.map(ride => (
+        {/* Explore Services */}
+        <View style={styles.servicesSection}>
+          <Text style={styles.sectionLabel}>Explore Services</Text>
+          <View style={styles.servicesRow}>
+            {SERVICES.map(service => (
               <TouchableOpacity
-                key={ride.id}
-                style={[
-                  styles.rideCard,
-                  selectedRide === ride.id && styles.rideCardActive,
-                ]}
-                onPress={() => setSelectedRide(ride.id)}>
-                {selectedRide === ride.id && (
-                  <LinearGradient
-                    colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
-                    style={StyleSheet.absoluteFill}
-                    borderRadius={BorderRadius.md}
-                  />
-                )}
-                <Text style={styles.rideIcon}>{ride.icon}</Text>
-                <Text
-                  style={[
-                    styles.rideLabel,
-                    selectedRide === ride.id && styles.rideLabelActive,
-                  ]}>
-                  {ride.label}
-                </Text>
-                <Text style={styles.ridePrice}>{ride.price}</Text>
-                <Text style={styles.rideEta}>{ride.eta}</Text>
+                key={service.id}
+                style={styles.serviceCard}
+                activeOpacity={0.85}
+                onPress={() => handleSelectService(service.id)}>
+                <View style={styles.serviceIconContainer}>
+                  <Text style={styles.serviceIcon}>{service.icon}</Text>
+                </View>
+                <Text style={styles.serviceTitle}>{service.title}</Text>
+                <Text style={styles.serviceDesc}>{service.desc}</Text>
+                <View style={styles.serviceFooter}>
+                  <Text style={styles.serviceEta}>{service.eta}</Text>
+                  <Text style={styles.serviceRate}>{service.rate}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Book button */}
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9} onPress={handleBookNow}>
-          <LinearGradient
-            colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.bookBtnGrad}>
-            <Text style={styles.bookBtnText}>Book {RIDE_TYPES.find(r => r.id === selectedRide)?.icon} Now</Text>
-            <Text style={styles.bookBtnArrow}>→</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {/* Banners Row */}
+        <View style={styles.bannersSection}>
+          <Text style={styles.sectionLabel}>Offers & Safety</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.bannersRow}>
+            {BANNERS.map(banner => (
+              <View
+                key={banner.id}
+                style={[
+                  styles.bannerCard,
+                  { borderColor: banner.borderColor }
+                ]}>
+                <LinearGradient
+                  colors={banner.bg as [string, string, ...string[]]}
+                  style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius.md }]}
+                />
+                <View style={styles.bannerHeader}>
+                  <Text style={styles.bannerEmoji}>{banner.emoji}</Text>
+                  <Text style={styles.bannerTitle}>{banner.title}</Text>
+                </View>
+                <Text style={styles.bannerDesc}>{banner.desc}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
       </View>
     </View>
   );
@@ -308,7 +349,7 @@ const styles = StyleSheet.create({
   locateBtn: {
     position: 'absolute',
     right: Spacing.xl,
-    bottom: 320,
+    bottom: 480,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -371,42 +412,91 @@ const styles = StyleSheet.create({
   },
   quickIcon: { fontSize: 18 },
   quickLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
-  rideTypes: { marginBottom: Spacing.md },
+  
+  servicesSection: { marginBottom: Spacing.md },
   sectionLabel: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
-    fontWeight: FontWeight.medium,
+    fontWeight: FontWeight.semiBold,
     marginBottom: Spacing.sm,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  rideRow: { flexDirection: 'row', gap: Spacing.sm },
-  rideCard: {
+  servicesRow: { flexDirection: 'row', gap: Spacing.sm },
+  serviceCard: {
     flex: 1,
-    alignItems: 'center',
     backgroundColor: Colors.surfaceElevated,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.surfaceBorder,
-    overflow: 'hidden',
-    gap: 2,
+    alignItems: 'center',
+    gap: 4,
   },
-  rideCardActive: { borderColor: Colors.primary },
-  rideIcon: { fontSize: 24 },
-  rideLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textSecondary },
-  rideLabelActive: { color: Colors.primary },
-  ridePrice: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  rideEta: { fontSize: FontSize.xs, color: Colors.textMuted },
-  bookBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden' },
-  bookBtnGrad: {
-    flexDirection: 'row',
+  serviceIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
-    ...Shadow.glow,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
   },
-  bookBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
-  bookBtnArrow: { fontSize: FontSize.lg, color: Colors.white },
+  serviceIcon: { fontSize: 22 },
+  serviceTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  serviceDesc: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    height: 24,
+  },
+  serviceFooter: {
+    alignItems: 'center',
+    marginTop: 4,
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: Colors.surfaceBorder,
+    paddingTop: 4,
+  },
+  serviceEta: {
+    fontSize: 10,
+    fontWeight: FontWeight.semiBold,
+    color: Colors.success,
+  },
+  serviceRate: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+
+  bannersSection: {},
+  bannersRow: { gap: Spacing.md, paddingRight: Spacing.xl },
+  bannerCard: {
+    width: 220,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    gap: 4,
+    minHeight: 80,
+  },
+  bannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 1 },
+  bannerEmoji: { fontSize: 16 },
+  bannerTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  },
+  bannerDesc: {
+    fontSize: 9,
+    color: Colors.textSecondary,
+    zIndex: 1,
+  },
 });

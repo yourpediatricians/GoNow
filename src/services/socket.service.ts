@@ -77,6 +77,7 @@ export const SOCKET_EVENTS = {
 
   // Ride events received by CAPTAIN
   RIDE_NEW_REQUEST: 'ride:new_request',
+  RIDE_REQUEST_TIMEOUT: 'ride:request_timeout',
 
   // Sent by CAPTAIN
   CAPTAIN_UPDATE_LOCATION: 'captain:update_location',

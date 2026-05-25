@@ -43,6 +43,7 @@ export const SelectLocationScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const type: 'pickup' | 'dropoff' = route.params?.type || 'dropoff';
+  const preSelectedRide = route.params?.preSelectedRide;
   const placeholder = type === 'pickup' ? 'Enter pickup location...' : 'Where to? Search location...';
 
   // Fetch suggestions when query changes
@@ -154,6 +155,7 @@ export const SelectLocationScreen: React.FC = () => {
       navigation.navigate('Booking', {
         pickup: state.pickup,
         dropoff: state.dropoff,
+        preSelectedRide,
       });
     } else {
       navigation.goBack();
@@ -192,6 +194,7 @@ export const SelectLocationScreen: React.FC = () => {
       navigation.navigate('Booking', {
         pickup: state.pickup,
         dropoff: state.dropoff,
+        preSelectedRide,
       });
     } else {
       navigation.goBack();
@@ -248,6 +251,7 @@ export const SelectLocationScreen: React.FC = () => {
           navigation.navigate('Booking', {
             pickup: state.pickup,
             dropoff: state.dropoff,
+            preSelectedRide,
           });
         } else {
           navigation.goBack();

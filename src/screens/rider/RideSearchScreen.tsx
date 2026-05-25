@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated,
-  StatusBar, Dimensions,
+  StatusBar, Dimensions, Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -66,12 +66,25 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation, route }) => {
         clearInterval(dotTimer);
         navigation.goBack();
       });
+
+      socket.on(SOCKET_EVENTS.RIDE_REJECTED, (data: any) => {
+        clearInterval(dotTimer);
+        Alert.alert('No Captain Found', data.reason || 'No captains accepted your request. Please try again.');
+        navigation.goBack();
+      });
+
+      socket.on(SOCKET_EVENTS.RIDE_STARTED, () => {
+        clearInterval(dotTimer);
+        navigation.replace('ActiveRide', { rideId });
+      });
     }
 
     return () => {
       clearInterval(dotTimer);
       socket?.off(SOCKET_EVENTS.RIDE_ACCEPTED);
       socket?.off(SOCKET_EVENTS.RIDE_CANCELLED);
+      socket?.off(SOCKET_EVENTS.RIDE_REJECTED);
+      socket?.off(SOCKET_EVENTS.RIDE_STARTED);
     };
   }, []);
 
