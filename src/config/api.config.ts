@@ -22,8 +22,8 @@ const PORT = '5000';
 // const DEV_SOCKET_URL = `http://${DEV_HOST}:${PORT}`;
 
 // ── Production (replace with your deployed URL) ────────────────────────────────
-const PROD_BASE_URL = 'https://api.gonow.app/api'; // 👈 change this when deploying
-const PROD_SOCKET_URL = 'https://api.gonow.app';   // 👈 change this when deploying
+const PROD_BASE_URL = 'https://go-now-backend.vercel.app/api'; // 👈 change this when deploying
+const PROD_SOCKET_URL = 'https://go-now-backend.vercel.app';   // 👈 change this when deploying
 
 // ── Active config (flip __DEV__ flag or change manually) ───────────────────────
 const IS_DEV = __DEV__;  // React Native's built-in flag (true in dev mode)
