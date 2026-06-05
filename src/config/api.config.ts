@@ -10,8 +10,10 @@
  */
 
 // ── Dev (local backend) ────────────────────────────────────────────────────────
-const DEV_BASE_URL = 'http://10.79.10.38:5000/api';
-const DEV_SOCKET_URL = 'http://10.79.10.38:5000';
+// const DEV_BASE_URL = 'http://10.79.10.38:5000/api';
+// const DEV_SOCKET_URL = 'http://10.79.10.38:5000';
+const DEV_BASE_URL = 'https://go-now-backend.vercel.app/api';
+const DEV_SOCKET_URL = 'https://go-now-backend.vercel.app';
 
 import { Platform } from 'react-native';
 
