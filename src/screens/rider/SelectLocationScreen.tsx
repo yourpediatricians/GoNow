@@ -142,12 +142,23 @@ export const SelectLocationScreen: React.FC = () => {
       longitude: lng,
     };
 
+    setIsLoading(false);
+
+    const originScreen = route.params?.originScreen;
+    if (originScreen === 'EconomyBooking') {
+      navigation.navigate('EconomyBooking', {
+        selectedLocation: selectedLoc,
+        type,
+        direction: route.params?.direction,
+      });
+      return;
+    }
+
     if (type === 'pickup') {
       setPickup(selectedLoc);
     } else {
       setDropoff(selectedLoc);
     }
-    setIsLoading(false);
 
     // If both are set, navigate to Booking, else just pop back
     const state = useRideStore.getState();
@@ -182,6 +193,16 @@ export const SelectLocationScreen: React.FC = () => {
       latitude: lat,
       longitude: lng,
     };
+
+    const originScreen = route.params?.originScreen;
+    if (originScreen === 'EconomyBooking') {
+      navigation.navigate('EconomyBooking', {
+        selectedLocation: customLoc,
+        type,
+        direction: route.params?.direction,
+      });
+      return;
+    }
 
     if (type === 'pickup') {
       setPickup(customLoc);
@@ -239,12 +260,23 @@ export const SelectLocationScreen: React.FC = () => {
           longitude: lng,
         };
 
+        setIsLoading(false);
+
+        const originScreen = route.params?.originScreen;
+        if (originScreen === 'EconomyBooking') {
+          navigation.navigate('EconomyBooking', {
+            selectedLocation: currentLoc,
+            type,
+            direction: route.params?.direction,
+          });
+          return;
+        }
+
         if (type === 'pickup') {
           setPickup(currentLoc);
         } else {
           setDropoff(currentLoc);
         }
-        setIsLoading(false);
 
         const state = useRideStore.getState();
         if (state.pickup && state.dropoff) {

@@ -10,9 +10,18 @@ let socket: Socket | null = null;
  * Call this after login and on app startup if user is authenticated.
  */
 export const connectSocket = async (): Promise<Socket> => {
-  if (socket?.connected) return socket;
-
   const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+
+  if (socket) {
+    if (socket.connected) return socket;
+    if (socket.auth) {
+      socket.auth.token = token;
+    } else {
+      socket.auth = { token };
+    }
+    socket.connect();
+    return socket;
+  }
 
   socket = io(SOCKET_URL, {
     auth: { token },

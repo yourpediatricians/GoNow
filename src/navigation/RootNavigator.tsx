@@ -23,6 +23,8 @@ import { RideCompleteScreen } from '../screens/rider/RideCompleteScreen';
 import { WalletScreen } from '../screens/rider/WalletScreen';
 import { NotificationsScreen } from '../screens/rider/NotificationsScreen';
 import { SelectLocationScreen } from '../screens/rider/SelectLocationScreen';
+import { EconomyBookingScreen } from '../screens/rider/EconomyBookingScreen';
+import { EconomyMatchingScreen } from '../screens/rider/EconomyMatchingScreen';
 
 // Screens - Captain
 import { CaptainDashboardScreen } from '../screens/captain/DashboardScreen';
@@ -102,6 +104,8 @@ const RiderNavigator = () => (
     <RiderStack.Screen name="RideSearch" component={RideSearchScreen} options={{ animation: 'fade' }} />
     <RiderStack.Screen name="RideComplete" component={RideCompleteScreen} options={{ animation: 'slide_from_bottom' }} />
     <RiderStack.Screen name="SelectLocation" component={SelectLocationScreen} options={{ animation: 'slide_from_right' }} />
+    <RiderStack.Screen name="EconomyBooking" component={EconomyBookingScreen} options={{ animation: 'slide_from_right' }} />
+    <RiderStack.Screen name="EconomyMatching" component={EconomyMatchingScreen} options={{ animation: 'fade' }} />
   </RiderStack.Navigator>
 );
 

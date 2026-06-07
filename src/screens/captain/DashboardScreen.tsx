@@ -17,11 +17,12 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useCaptainStore } from '../../store/captainStore';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
-import { getSocket, SOCKET_EVENTS, emitLocationUpdate } from '../../services/socket.service';
+import { getSocket, connectSocket, SOCKET_EVENTS, emitLocationUpdate } from '../../services/socket.service';
 import Geolocation from '@react-native-community/geolocation';
 import { RideRequest } from '../../types';
 import { IncomingRideScreen } from './IncomingRideScreen';
 import { rideService } from '../../services/ride.service';
+import { poolService } from '../../services/pool.service';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,12 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [otpCode, setOtpCode] = useState('');
   const [isRideActionLoading, setIsRideActionLoading] = useState(false);
 
+  // E-Rickshaw Pool Local States
+  const [incomingPoolRequest, setIncomingPoolRequest] = useState<any>(null);
+  const [activePoolDetails, setActivePoolDetails] = useState<any>(null);
+  const [activePoolId, setActivePoolId] = useState<string | null>(null);
+  const [pendingRiderRequest, setPendingRiderRequest] = useState<any>(null);
+
   const maxEarning = weeklyEarnings.length
     ? Math.max(...weeklyEarnings.map(d => d.amount), 1)
     : 1;
@@ -61,9 +68,32 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
-  // Fetch earnings on mount
+  // Fetch active pool details
+  const fetchActivePool = async () => {
+    try {
+      const res = await poolService.getActivePool();
+      if (res.success && res.data?.pool) {
+        setActivePoolDetails(res.data.pool);
+        setActivePoolId(res.data.pool._id);
+
+        // Join socket room
+        const socket = getSocket();
+        if (socket) {
+          socket.emit('pool:join_room', { poolId: res.data.pool._id });
+        }
+      } else {
+        setActivePoolDetails(null);
+        setActivePoolId(null);
+      }
+    } catch (err) {
+      console.error('Error fetching active pool details:', err);
+    }
+  };
+
+  // Fetch earnings and active pool on mount
   useEffect(() => {
     fetchEarnings();
+    fetchActivePool();
   }, []);
 
   // Fetch active ride details when activeRideId changes
@@ -78,10 +108,11 @@ export const CaptainDashboardScreen: React.FC = () => {
 
   // Listen for incoming ride requests and cancellation via Socket.io
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
+    let active = true;
+    let socketInstance: any = null;
 
     const rideReqHandler = (data: RideRequest) => {
+      console.log('📡 [DashboardScreen] Received ride request socket data:', JSON.stringify(data, null, 2));
       setIncomingRequest(data);
     };
 
@@ -100,16 +131,65 @@ export const CaptainDashboardScreen: React.FC = () => {
       }
     };
 
-    socket.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
-    socket.on(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
-    socket.on(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
+    const poolReqHandler = (data: any) => {
+      setIncomingPoolRequest(data);
+    };
+
+    const poolCancelHandler = (data: any) => {
+      if (activePoolId && data.poolId === activePoolId) {
+        Alert.alert('Pool Cancelled', 'This shared pool has been cancelled.');
+        setActivePoolId(null);
+        setActivePoolDetails(null);
+      }
+    };
+
+    const poolUpdatedHandler = (data: any) => {
+      if (activePoolId && data.poolId === activePoolId) {
+        fetchActivePool();
+      }
+    };
+
+    const addRiderReqHandler = (data: any) => {
+      setPendingRiderRequest(data);
+    };
+
+    const initSocketConnection = async () => {
+      try {
+        const sock = isOnline ? await connectSocket() : getSocket();
+        if (!active || !sock) return;
+        socketInstance = sock;
+
+        if (isOnline && !sock.connected) {
+          sock.connect();
+        }
+
+        sock.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
+        sock.on(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+        sock.on(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
+        sock.on('pool:new_request', poolReqHandler);
+        sock.on('pool:cancelled', poolCancelHandler);
+        sock.on('pool:updated', poolUpdatedHandler);
+        sock.on('pool:add_rider_request', addRiderReqHandler);
+      } catch (err) {
+        console.warn('Socket listener init failed:', err);
+      }
+    };
+
+    initSocketConnection();
 
     return () => {
-      socket.off(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
-      socket.off(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
-      socket.off(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
+      active = false;
+      if (socketInstance) {
+        socketInstance.off(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
+        socketInstance.off(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
+        socketInstance.off(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
+        socketInstance.off('pool:new_request', poolReqHandler);
+        socketInstance.off('pool:cancelled', poolCancelHandler);
+        socketInstance.off('pool:updated', poolUpdatedHandler);
+        socketInstance.off('pool:add_rider_request', addRiderReqHandler);
+      }
     };
-  }, [activeRideId]);
+  }, [isOnline, activeRideId, activePoolId]);
 
   // Periodic location updates when captain is online
   useEffect(() => {
@@ -131,6 +211,20 @@ export const CaptainDashboardScreen: React.FC = () => {
               activeRideDetails.rider._id
             );
           }
+
+          // Emit location to active pool riders if applicable
+          if (activePoolId && activePoolDetails?.riders) {
+            activePoolDetails.riders.forEach((r: any) => {
+              if (r.user?._id) {
+                emitLocationUpdate(
+                  latitude,
+                  longitude,
+                  activePoolId,
+                  r.user._id
+                );
+              }
+            });
+          }
         },
         (error) => console.log('Location update error:', error),
         { enableHighAccuracy: true, timeout: 10000 }
@@ -138,7 +232,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     }, 10000); // every 10 seconds
 
     return () => clearInterval(interval);
-  }, [isOnline, activeRideId, activeRideDetails]);
+  }, [isOnline, activeRideId, activeRideDetails, activePoolId, activePoolDetails]);
 
   // Request location permission at runtime (required on Android 6+)
   const requestLocationPermission = async (): Promise<boolean> => {
@@ -219,6 +313,9 @@ export const CaptainDashboardScreen: React.FC = () => {
         coords = await getPosition(true, 15000);
       }
 
+      // Ensure socket is connected before toggling online in DB
+      await connectSocket().catch(err => console.warn('Socket connection failed on toggle online:', err));
+
       toggleOnline(true, coords.latitude, coords.longitude).catch(err =>
         Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
       );
@@ -267,7 +364,277 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
-  const handleCancelActiveRide = () => {
+  const handleAcceptPool = async () => {
+    if (!incomingPoolRequest) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await poolService.acceptPool(incomingPoolRequest.poolId);
+      if (res.success) {
+        setIncomingPoolRequest(null);
+        setActivePoolId(res.data.pool._id);
+        fetchActivePool();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to accept pool.');
+      setIncomingPoolRequest(null);
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleAcceptAdditionalRider = async () => {
+    if (!pendingRiderRequest) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await poolService.acceptAdditionalRider(
+        pendingRiderRequest.poolId,
+        pendingRiderRequest.rider.id
+      );
+      if (res.success) {
+        setPendingRiderRequest(null);
+        fetchActivePool();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to accept co-rider.');
+      setPendingRiderRequest(null);
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleDeclineAdditionalRider = async () => {
+    if (!pendingRiderRequest) return;
+    setIsRideActionLoading(true);
+    try {
+      await poolService.declineAdditionalRider(
+        pendingRiderRequest.poolId,
+        pendingRiderRequest.rider.id
+      );
+      setPendingRiderRequest(null);
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to decline co-rider.');
+      setPendingRiderRequest(null);
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleStartPool = async () => {
+    if (!activePoolId) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await poolService.startPool(activePoolId);
+      if (res.success) {
+        fetchActivePool();
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to start pool.');
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleCompletePool = async () => {
+    if (!activePoolId) return;
+    setIsRideActionLoading(true);
+    try {
+      await poolService.completePool(activePoolId);
+      Alert.alert('Pool Completed', 'Total earnings for the pool added to your account!');
+      setActivePoolId(null);
+      setActivePoolDetails(null);
+      fetchEarnings(); // refresh dashboard stats
+    } catch (err) {
+      Alert.alert('Error', 'Failed to complete pool.');
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const renderIncomingPoolRequestModal = () => {
+    if (!incomingPoolRequest) return null;
+    return (
+      <View style={styles.activeOverlay}>
+        <View style={styles.activeSheet}>
+          <LinearGradient colors={['#FFC72C', '#F8B100']} style={styles.activeSheetHeader}>
+            <Text style={[styles.activeSheetTitle, { color: '#1A0800' }]}>🛺 New Pool Assignment</Text>
+            <Text style={[styles.activeSheetSubtitle, { color: 'rgba(26,8,0,0.8)' }]}>
+              {incomingPoolRequest.ridersCount} Passengers Ready for Booking
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.poolRequestDetails}>
+            <Text style={styles.poolReqDetailLabel}>ROUTE</Text>
+            <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.route}</Text>
+            
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>BOARDING PICKUP POINT</Text>
+            <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.pickupPoint}</Text>
+
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>ESTIMATED EARNINGS</Text>
+            <Text style={[styles.poolReqDetailVal, { fontSize: FontSize.lg, color: Colors.success, fontWeight: FontWeight.black }]}>
+              ₹{incomingPoolRequest.earnings}
+            </Text>
+          </View>
+
+          <View style={styles.poolReqActions}>
+            <TouchableOpacity 
+              style={[styles.poolBtn, styles.poolBtnReject]} 
+              onPress={() => setIncomingPoolRequest(null)}>
+              <Text style={styles.poolBtnTextReject}>Reject</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.poolBtn, styles.poolBtnAccept]} 
+              onPress={handleAcceptPool}>
+              <LinearGradient
+                colors={['#FFC72C', '#F8B100']}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Text style={styles.poolBtnTextAccept}>Accept Pool ➔</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPendingRiderRequestModal = () => {
+    if (!pendingRiderRequest) return null;
+    const { rider } = pendingRiderRequest;
+    return (
+      <View style={styles.activeOverlay}>
+        <View style={styles.activeSheet}>
+          <LinearGradient colors={['#FF5A1F', '#FF7A45']} style={styles.activeSheetHeader}>
+            <Text style={styles.activeSheetTitle}>🛺 Co-Rider Request</Text>
+            <Text style={styles.activeSheetSubtitle}>
+              A passenger wants to join your E-Rickshaw route!
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.poolRequestDetails}>
+            <Text style={styles.poolReqDetailLabel}>PASSENGER</Text>
+            <Text style={styles.poolReqDetailVal}>{rider.name || 'Co-Rider'}</Text>
+            
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>PICKUP</Text>
+            <Text style={styles.poolReqDetailVal}>{rider.pickup.address}</Text>
+
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>DROP OFF</Text>
+            <Text style={styles.poolReqDetailVal}>{rider.dropoff.address}</Text>
+
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>ESTIMATED EXTRA EARNINGS</Text>
+            <Text style={[styles.poolReqDetailVal, { fontSize: FontSize.lg, color: Colors.success, fontWeight: FontWeight.black }]}>
+              +₹15
+            </Text>
+          </View>
+
+          <View style={styles.poolReqActions}>
+            <TouchableOpacity 
+              style={[styles.poolBtn, styles.poolBtnReject]} 
+              onPress={handleDeclineAdditionalRider}>
+              <Text style={styles.poolBtnTextReject}>Decline</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.poolBtn, styles.poolBtnAccept]} 
+              onPress={handleAcceptAdditionalRider}>
+              <LinearGradient
+                colors={['#FF5A1F', '#FF7A45']}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Text style={styles.poolBtnTextAccept}>Accept Rider ➔</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderActivePoolPanel = () => {
+    if (!activePoolDetails) return null;
+    const status = activePoolDetails.status;
+    const isMatched = status === 'matched';
+    const isStarted = status === 'started';
+
+    return (
+      <View style={styles.activeOverlay}>
+        <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.85)" />
+        <View style={styles.activeSheet}>
+          <LinearGradient colors={['#1A0800', '#0D0D0D']} style={styles.activeSheetHeader}>
+            <Text style={styles.activeSheetTitle}>
+              {isMatched ? '🛺 Pool Assigned' : '🚀 Shared Trip in Progress'}
+            </Text>
+            <Text style={styles.activeSheetSubtitle}>
+              {isMatched ? 'Head to boarding pickup point' : 'Dropping off passengers sequence'}
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.poolInfoCard}>
+            <Text style={styles.poolInfoId}>Pool ID: P#{activePoolDetails._id?.slice(-4).toUpperCase()}</Text>
+            <Text style={styles.poolInfoSeats}>💺 {activePoolDetails.riders?.length} / 4 Seats</Text>
+          </View>
+
+          <ScrollView style={styles.ridersList} contentContainerStyle={{ gap: Spacing.sm }}>
+            {activePoolDetails.riders?.map((rider: any, idx: number) => (
+              <View key={idx} style={styles.riderListItem}>
+                <View style={styles.riderListAvatar}>
+                  <Text style={styles.riderListAvatarText}>👤</Text>
+                </View>
+                <View style={styles.riderListInfo}>
+                  <Text style={styles.riderListName}>{rider.user?.name || 'Rider'}</Text>
+                  <Text style={styles.riderListDrop} numberOfLines={1}>➔ {rider.dropoff?.address}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.riderListCallBtn}
+                  onPress={() => Alert.alert('Calling Rider', `Dialing: ${rider.user?.phone}`)}>
+                  <Text style={{ fontSize: 14 }}>📞</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+
+          {isMatched && (
+            <View style={styles.pickupPointBox}>
+              <Text style={styles.pickupPointLabel}>BOARDING PICKUP POINT</Text>
+              <Text style={styles.pickupPointVal}>📍 {activePoolDetails.direction === 'to_home' 
+                ? `${activePoolDetails.zone?.metroStation?.name} (Gate 1)` 
+                : 'Collect riders from locations'}</Text>
+            </View>
+          )}
+
+          {isMatched && (
+            <TouchableOpacity
+              style={styles.poolActionBtn}
+              onPress={handleStartPool}
+              disabled={isRideActionLoading}>
+              <LinearGradient
+                colors={['#FFC72C', '#F8B100']}
+                style={styles.poolActionBtnGrad}>
+                <Text style={styles.poolActionBtnText}>
+                  {isRideActionLoading ? 'Starting Pool...' : 'Start Trip ➔'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          {isStarted && (
+            <TouchableOpacity
+              style={styles.poolActionBtn}
+              onPress={handleCompletePool}
+              disabled={isRideActionLoading}>
+              <LinearGradient
+                colors={[Colors.success, '#16A34A']}
+                style={styles.poolActionBtnGrad}>
+                <Text style={styles.poolActionBtnText}>
+                  {isRideActionLoading ? 'Completing Pool...' : '✓ Complete Pool'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  function handleCancelActiveRide() {
     Alert.alert(
       'Cancel Active Ride',
       'Are you sure you want to cancel this ride?',
@@ -292,7 +659,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         }
       ]
     );
-  };
+  }
 
   const renderActiveRidePanel = () => {
     if (!activeRideDetails) return null;
@@ -430,6 +797,9 @@ export const CaptainDashboardScreen: React.FC = () => {
       {/* Active Ride Workflow Panel overlay */}
       {renderActiveRidePanel()}
 
+      {/* Active Pool Workflow Panel overlay */}
+      {renderActivePoolPanel()}
+
       {/* Incoming ride request overlay */}
       {incomingRequest && !activeRideId && (
         <IncomingRideScreen
@@ -437,6 +807,12 @@ export const CaptainDashboardScreen: React.FC = () => {
           onReject={() => setIncomingRequest(null)}
         />
       )}
+
+      {/* Incoming pool request overlay */}
+      {incomingPoolRequest && !activePoolId && renderIncomingPoolRequestModal()}
+
+      {/* Dynamic co-rider request overlay */}
+      {pendingRiderRequest && renderPendingRiderRequestModal()}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -706,4 +1082,155 @@ const styles = StyleSheet.create({
   completeRideBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.lg },
   cancelActiveBtn: { marginHorizontal: Spacing.xl, alignItems: 'center', paddingVertical: Spacing.md },
   cancelActiveText: { color: Colors.error, fontWeight: FontWeight.bold, fontSize: FontSize.sm },
+  
+  // Shared Pool styles
+  poolInfoCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: Spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surfaceElevated,
+  },
+  poolInfoId: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  poolInfoSeats: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+  },
+  ridersList: {
+    maxHeight: 180,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+  },
+  riderListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.sm,
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    gap: Spacing.sm,
+  },
+  riderListAvatar: {
+    width: 32, height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,90,31,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  riderListAvatarText: {
+    fontSize: 14,
+  },
+  riderListInfo: {
+    flex: 1,
+  },
+  riderListName: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  riderListDrop: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  riderListCallBtn: {
+    width: 32, height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  pickupPointBox: {
+    padding: Spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+    backgroundColor: 'rgba(248,177,0,0.06)',
+  },
+  pickupPointLabel: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  pickupPointVal: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    marginTop: 4,
+  },
+  poolActionBtn: {
+    margin: Spacing.xl,
+    marginBottom: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+  },
+  poolActionBtnGrad: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  poolActionBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.lg,
+  },
+  poolRequestDetails: {
+    padding: Spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+    gap: 4,
+  },
+  poolReqDetailLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  poolReqDetailVal: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    marginTop: 2,
+  },
+  poolReqActions: {
+    flexDirection: 'row',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  poolBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  poolBtnReject: {
+    backgroundColor: Colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  poolBtnAccept: {
+    position: 'relative',
+  },
+  poolBtnTextReject: {
+    color: Colors.error,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.base,
+  },
+  poolBtnTextAccept: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.base,
+    zIndex: 1,
+  },
 });

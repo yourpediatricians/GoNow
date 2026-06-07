@@ -240,6 +240,41 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
+        {/* E-Rickshaw Pooling Widget */}
+        <View style={styles.poolingSection}>
+          <Text style={styles.poolingLabel}>🛺 GoNow Shared Economy (E-Rickshaw)</Text>
+          <View style={styles.poolingCardsRow}>
+            {/* Go to Metro Card */}
+            <TouchableOpacity 
+              style={[styles.poolingCard, styles.metroCard]} 
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('EconomyBooking', { direction: 'to_metro' })}>
+              <LinearGradient
+                colors={['#FFC72C', '#F8B100']}
+                style={StyleSheet.absoluteFillObject}
+                borderRadius={BorderRadius.md}
+              />
+              <View style={styles.poolingCardHeader}>
+                <Text style={styles.poolingCardIcon}>🚉</Text>
+                <Text style={styles.poolingCardTitleMetro}>Go to Metro</Text>
+              </View>
+              <Text style={styles.poolingCardDescMetro}>चलो, आज का सफर शुरू करें</Text>
+            </TouchableOpacity>
+
+            {/* Go Home Card */}
+            <TouchableOpacity 
+              style={[styles.poolingCard, styles.homeCard]} 
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('EconomyBooking', { direction: 'to_home' })}>
+              <View style={styles.poolingCardHeader}>
+                <Text style={styles.poolingCardIcon}>🏠</Text>
+                <Text style={styles.poolingCardTitleHome}>Go Home</Text>
+              </View>
+              <Text style={styles.poolingCardDescHome}>स्टेशन से घर जाओ</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Quick destinations */}
         <ScrollView
           horizontal
@@ -497,6 +532,70 @@ const styles = StyleSheet.create({
   bannerDesc: {
     fontSize: 9,
     color: Colors.textSecondary,
+    zIndex: 1,
+  },
+  poolingSection: {
+    marginVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  poolingLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.semiBold,
+    marginBottom: Spacing.xs,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  poolingCardsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  poolingCard: {
+    flex: 1,
+    height: 90,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    justifyContent: 'space-between',
+    ...Shadow.sm,
+    overflow: 'hidden',
+  },
+  metroCard: {
+    backgroundColor: '#F8B100',
+  },
+  homeCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  poolingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    zIndex: 1,
+  },
+  poolingCardIcon: {
+    fontSize: 20,
+  },
+  poolingCardTitleMetro: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.black,
+    color: '#1A0800',
+  },
+  poolingCardTitleHome: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.black,
+    color: Colors.textPrimary,
+  },
+  poolingCardDescMetro: {
+    fontSize: 11,
+    color: 'rgba(26,8,0,0.8)',
+    fontWeight: FontWeight.medium,
+    zIndex: 1,
+  },
+  poolingCardDescHome: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
     zIndex: 1,
   },
 });

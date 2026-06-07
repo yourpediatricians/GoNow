@@ -32,7 +32,7 @@ export type RideStatus =
   | 'completed'
   | 'cancelled';
 
-export type RideType = 'bike' | 'auto' | 'cab';
+export type RideType = 'bike' | 'auto' | 'cab' | 'economy';
 
 export interface RideOption {
   id: RideType;
@@ -144,7 +144,17 @@ export type RiderStackParamList = {
   RideSearch: { rideId: string };
   ActiveRide: { rideId: string };
   RideComplete: { rideId: string; fare: number; distance: number; rideType: RideType };
-  SelectLocation: { type: 'pickup' | 'dropoff' };
+  SelectLocation: {
+    type: 'pickup' | 'dropoff';
+    originScreen?: 'Booking' | 'EconomyBooking';
+    direction?: 'to_metro' | 'to_home';
+  };
+  EconomyBooking: {
+    direction: 'to_metro' | 'to_home';
+    selectedLocation?: Location;
+    type?: 'pickup' | 'dropoff';
+  };
+  EconomyMatching: { poolId: string };
 };
 
 export type CaptainTabParamList = {
@@ -157,4 +167,6 @@ export type CaptainStackParamList = {
   CaptainTabs: undefined;
   RideRequest: { request: RideRequest };
   CaptainActiveRide: { rideId: string };
+  PoolDetail: { poolId: string };
+  ActivePoolTrip: { poolId: string };
 };

@@ -80,6 +80,13 @@ export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onRe
   };
 
   const req = incomingRequest;
+
+  useEffect(() => {
+    if (req) {
+      console.log('🔌 [IncomingRideScreen] Received request payload:', JSON.stringify(req, null, 2));
+    }
+  }, [req]);
+
   if (!req) return null;
 
   const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
