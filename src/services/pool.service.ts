@@ -33,6 +33,11 @@ export const poolService = {
     return data;
   },
 
+  getActivePool: async () => {
+    const { data } = await api.get('/pools/active/captain');
+    return data;
+  },
+
   startPool: async (poolId: string) => {
     const { data } = await api.post(`/pools/${poolId}/start`);
     return data;

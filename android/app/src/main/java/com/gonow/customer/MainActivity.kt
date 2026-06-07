@@ -1,4 +1,4 @@
-package com.gonow
+package com.gonow.customer
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

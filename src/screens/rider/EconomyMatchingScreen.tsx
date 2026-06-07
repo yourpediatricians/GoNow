@@ -14,7 +14,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RiderStackParamList, CaptainInfo } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
-import { getSocket } from '../../services/socket.service';
+import { getSocket, connectSocket } from '../../services/socket.service';
 import { poolService } from '../../services/pool.service';
 import { useAuthStore } from '../../store/authStore';
 
@@ -50,9 +50,13 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
 
   // Fetch pool details and subscribe to socket
   useEffect(() => {
+    let socketInstance: any = null;
+    let active = true;
+
     const fetchDetails = async () => {
       try {
         const result = await poolService.getPoolDetails(poolId);
+        if (!active) return;
         const p = result.data.pool;
         setRidersCount(p.riders.length);
         
@@ -78,95 +82,125 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
       } catch (err) {
         console.warn('Error fetching pool details:', err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchDetails();
 
-    const socket = getSocket();
-    if (socket) {
-      socket.emit('pool:join_room', { poolId });
+    const poolUpdatedHandler = (data: any) => {
+      setRidersCount(data.ridersCount);
+      setStatus(data.status === 'pending_accept' ? 'waiting' : data.status);
+      if (data.status === 'pending_accept') {
+        setCountdown('Waiting for driver to accept co-ride...');
+      }
+      if (data.timerStartAt) {
+        setTimerStartAt(new Date(data.timerStartAt));
+      }
+    };
 
-      socket.on('pool:updated', (data: any) => {
-        setRidersCount(data.ridersCount);
-        setStatus(data.status === 'pending_accept' ? 'waiting' : data.status);
-        if (data.status === 'pending_accept') {
-          setCountdown('Waiting for driver to accept co-ride...');
+    const poolMatchedHandler = (data: any) => {
+      setStatus('matched');
+      const currentUser = useAuthStore.getState().user;
+      const myRide = data.rides.find((r: any) => r.riderId === currentUser?.id);
+      if (myRide) {
+        setMyRideId(myRide.rideId);
+      }
+      
+      // Map captain info
+      const cap = {
+        id: data.captain.id,
+        name: data.captain.name,
+        phone: data.captain.phone,
+        rating: data.captain.rating,
+        vehicle: data.captain.vehicle,
+      };
+      setMatchedCaptain(cap);
+      setPickupPointName(data.pickupPoint);
+
+      Animated.parallel([
+        Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
+        Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]).start();
+    };
+
+    const poolStartedHandler = (data: any) => {
+      setStatus('started');
+      Alert.alert('Ride Started', 'Your shared e-rickshaw trip has started!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (myRideId) {
+              navigation.replace('ActiveRide', { rideId: myRideId });
+            }
+          }
         }
-        if (data.timerStartAt) {
-          setTimerStartAt(new Date(data.timerStartAt));
-        }
-      });
+      ]);
+    };
 
-      socket.on('pool:matched', (data: any) => {
-        setStatus('matched');
-        const currentUser = useAuthStore.getState().user;
-        const myRide = data.rides.find((r: any) => r.riderId === currentUser?.id);
-        if (myRide) {
-          setMyRideId(myRide.rideId);
-        }
-        
-        // Map captain info
-        const cap = {
-          id: data.captain.id,
-          name: data.captain.name,
-          phone: data.captain.phone,
-          rating: data.captain.rating,
-          vehicle: data.captain.vehicle,
-        };
-        setMatchedCaptain(cap);
-        setPickupPointName(data.pickupPoint);
+    const poolReroutedHandler = (data: any) => {
+      console.log(`🔄 Rerouted from pool ${data.oldPoolId} to ${data.newPoolId}`);
+      if (socketInstance) {
+        socketInstance.emit('pool:join_room', { poolId: data.newPoolId });
+      }
+      navigation.setParams({ poolId: data.newPoolId });
+    };
 
-        Animated.parallel([
-          Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-          Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-        ]).start();
-      });
-
-      socket.on('pool:started', (data: any) => {
-        setStatus('started');
-        Alert.alert('Ride Started', 'Your shared e-rickshaw trip has started!', [
+    const poolCancelledHandler = (data: any) => {
+      Alert.alert(
+        'No Captains Available',
+        data.reason || 'No available E-Rickshaws nearby at this time. Please try booking again.',
+        [
           {
             text: 'OK',
             onPress: () => {
-              if (myRideId) {
-                navigation.replace('ActiveRide', { rideId: myRideId });
-              }
+              navigation.navigate('RiderTabs');
             }
           }
-        ]);
-      });
+        ]
+      );
+    };
 
-      socket.on('pool:rerouted', (data: any) => {
-        console.log(`🔄 Rerouted from pool ${data.oldPoolId} to ${data.newPoolId}`);
-        socket.emit('pool:join_room', { poolId: data.newPoolId });
-        navigation.setParams({ poolId: data.newPoolId });
-      });
+    const initSocket = async () => {
+      try {
+        const sock = getSocket() || await connectSocket();
+        if (!active || !sock) return;
+        socketInstance = sock;
+        if (!sock.connected) {
+          sock.connect();
+        }
 
-      socket.on('pool:cancelled', (data: any) => {
-        Alert.alert(
-          'No Captains Available',
-          data.reason || 'No available E-Rickshaws nearby at this time. Please try booking again.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.navigate('RiderTabs');
-              }
-            }
-          ]
-        );
-      });
-    }
+        // Re-join pool room on reconnect to prevent room membership loss
+        sock.on('connect', () => {
+          if (poolId) {
+            sock.emit('pool:join_room', { poolId });
+            fetchDetails();
+          }
+        });
+
+        sock.emit('pool:join_room', { poolId });
+
+        sock.on('pool:updated', poolUpdatedHandler);
+        sock.on('pool:matched', poolMatchedHandler);
+        sock.on('pool:started', poolStartedHandler);
+        sock.on('pool:rerouted', poolReroutedHandler);
+        sock.on('pool:cancelled', poolCancelledHandler);
+      } catch (err) {
+        console.warn('Socket connection failed in EconomyMatchingScreen:', err);
+      }
+    };
+
+    initSocket();
 
     return () => {
-      if (socket) {
-        socket.off('pool:updated');
-        socket.off('pool:matched');
-        socket.off('pool:started');
-        socket.off('pool:rerouted');
-        socket.off('pool:cancelled');
+      active = false;
+      if (socketInstance) {
+        socketInstance.off('connect');
+        socketInstance.off('pool:updated', poolUpdatedHandler);
+        socketInstance.off('pool:matched', poolMatchedHandler);
+        socketInstance.off('pool:started', poolStartedHandler);
+        socketInstance.off('pool:rerouted', poolReroutedHandler);
+        socketInstance.off('pool:cancelled', poolCancelledHandler);
       }
     };
   }, [poolId, myRideId]);

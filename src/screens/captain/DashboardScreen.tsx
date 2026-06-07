@@ -50,6 +50,9 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [activePoolDetails, setActivePoolDetails] = useState<any>(null);
   const [activePoolId, setActivePoolId] = useState<string | null>(null);
   const [pendingRiderRequest, setPendingRiderRequest] = useState<any>(null);
+  const [activePoolRides, setActivePoolRides] = useState<any[]>([]);
+  const [verifyingRideId, setVerifyingRideId] = useState<string | null>(null);
+  const [poolOtpCode, setPoolOtpCode] = useState<string>('');
 
   const maxEarning = weeklyEarnings.length
     ? Math.max(...weeklyEarnings.map(d => d.amount), 1)
@@ -75,6 +78,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       if (res.success && res.data?.pool) {
         setActivePoolDetails(res.data.pool);
         setActivePoolId(res.data.pool._id);
+        setActivePoolRides(res.data.rides || []);
 
         // Join socket room
         const socket = getSocket();
@@ -84,6 +88,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       } else {
         setActivePoolDetails(null);
         setActivePoolId(null);
+        setActivePoolRides([]);
       }
     } catch (err) {
       console.error('Error fetching active pool details:', err);
@@ -140,6 +145,10 @@ export const CaptainDashboardScreen: React.FC = () => {
         Alert.alert('Pool Cancelled', 'This shared pool has been cancelled.');
         setActivePoolId(null);
         setActivePoolDetails(null);
+        setActivePoolRides([]);
+        setVerifyingRideId(null);
+        setPoolOtpCode('');
+        setPendingRiderRequest(null);
       }
     };
 
@@ -153,6 +162,15 @@ export const CaptainDashboardScreen: React.FC = () => {
       setPendingRiderRequest(data);
     };
 
+    const addRiderCancelledHandler = (data: any) => {
+      setPendingRiderRequest((current: any) => {
+        if (current && current.poolId === data.poolId && current.rider?.id === data.riderId) {
+          return null;
+        }
+        return current;
+      });
+    };
+
     const initSocketConnection = async () => {
       try {
         const sock = isOnline ? await connectSocket() : getSocket();
@@ -163,6 +181,14 @@ export const CaptainDashboardScreen: React.FC = () => {
           sock.connect();
         }
 
+        // Re-join pool room on reconnect to prevent room membership loss
+        sock.on('connect', () => {
+          if (activePoolId) {
+            sock.emit('pool:join_room', { poolId: activePoolId });
+          }
+          fetchActivePool();
+        });
+
         sock.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
         sock.on(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
         sock.on(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
@@ -170,6 +196,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         sock.on('pool:cancelled', poolCancelHandler);
         sock.on('pool:updated', poolUpdatedHandler);
         sock.on('pool:add_rider_request', addRiderReqHandler);
+        sock.on('pool:add_rider_cancelled', addRiderCancelledHandler);
       } catch (err) {
         console.warn('Socket listener init failed:', err);
       }
@@ -180,6 +207,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     return () => {
       active = false;
       if (socketInstance) {
+        socketInstance.off('connect');
         socketInstance.off(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
         socketInstance.off(SOCKET_EVENTS.RIDE_CANCELLED, rideCancelHandler);
         socketInstance.off(SOCKET_EVENTS.RIDE_REQUEST_TIMEOUT, rideTimeoutHandler);
@@ -187,6 +215,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         socketInstance.off('pool:cancelled', poolCancelHandler);
         socketInstance.off('pool:updated', poolUpdatedHandler);
         socketInstance.off('pool:add_rider_request', addRiderReqHandler);
+        socketInstance.off('pool:add_rider_cancelled', addRiderCancelledHandler);
       }
     };
   }, [isOnline, activeRideId, activePoolId]);
@@ -314,7 +343,26 @@ export const CaptainDashboardScreen: React.FC = () => {
       }
 
       // Ensure socket is connected before toggling online in DB
-      await connectSocket().catch(err => console.warn('Socket connection failed on toggle online:', err));
+      const sock = await connectSocket().catch(err => {
+        console.warn('Socket connection failed on toggle online:', err);
+        return null;
+      });
+
+      if (sock && !sock.connected) {
+        console.log('⏳ Waiting for socket to connect before going online in DB...');
+        await new Promise<void>((resolve) => {
+          const connectTimeout = setTimeout(() => {
+            console.log('⏱️ Socket connection wait timed out.');
+            resolve();
+          }, 5000);
+
+          sock.once('connect', () => {
+            clearTimeout(connectTimeout);
+            console.log('✅ Socket connected, proceeding to toggle online.');
+            resolve();
+          });
+        });
+      }
 
       toggleOnline(true, coords.latitude, coords.longitude).catch(err =>
         Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
@@ -414,6 +462,24 @@ export const CaptainDashboardScreen: React.FC = () => {
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message || 'Failed to decline co-rider.');
       setPendingRiderRequest(null);
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
+  const handleVerifyPoolRiderOtp = async (rideId: string) => {
+    if (poolOtpCode.length < 4 || isRideActionLoading) return;
+    setIsRideActionLoading(true);
+    try {
+      const res = await rideService.verifyRideOtp(rideId, poolOtpCode);
+      if (res.success) {
+        setVerifyingRideId(null);
+        setPoolOtpCode('');
+        fetchActivePool();
+        Alert.alert('Success', 'Rider OTP verified successfully!');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Invalid OTP');
     } finally {
       setIsRideActionLoading(false);
     }
@@ -573,22 +639,77 @@ export const CaptainDashboardScreen: React.FC = () => {
           </View>
 
           <ScrollView style={styles.ridersList} contentContainerStyle={{ gap: Spacing.sm }}>
-            {activePoolDetails.riders?.map((rider: any, idx: number) => (
-              <View key={idx} style={styles.riderListItem}>
-                <View style={styles.riderListAvatar}>
-                  <Text style={styles.riderListAvatarText}>👤</Text>
+            {activePoolDetails.riders?.map((rider: any, idx: number) => {
+              const riderRide = activePoolRides.find(
+                (r: any) => r.riderId === (rider.user?._id || rider.user)
+              );
+              const isOtpVerified = riderRide
+                ? (riderRide.status === 'otp_verified' || riderRide.status === 'in_progress' || riderRide.status === 'completed')
+                : false;
+
+              return (
+                <View key={idx} style={styles.riderListItem}>
+                  <View style={styles.riderListAvatar}>
+                    <Text style={styles.riderListAvatarText}>👤</Text>
+                  </View>
+                  <View style={styles.riderListInfo}>
+                    <Text style={styles.riderListName}>{rider.user?.name || 'Rider'}</Text>
+                    <Text style={styles.riderListDrop} numberOfLines={1}>➔ {rider.dropoff?.address}</Text>
+                  </View>
+                  <View style={styles.riderListActions}>
+                    {riderRide && isMatched && (
+                      isOtpVerified ? (
+                        <Text style={styles.boardedText}>🟢 Boarded</Text>
+                      ) : (
+                        verifyingRideId === riderRide.rideId ? (
+                          <View style={styles.inlineOtpRow}>
+                            <TextInput
+                              style={styles.inlineOtpInput}
+                              placeholder="OTP"
+                              placeholderTextColor={Colors.textMuted}
+                              keyboardType="number-pad"
+                              maxLength={4}
+                              value={poolOtpCode}
+                              onChangeText={poolOtpText => setPoolOtpCode(poolOtpText)}
+                            />
+                            <TouchableOpacity
+                              style={styles.inlineVerifyBtn}
+                              onPress={() => handleVerifyPoolRiderOtp(riderRide.rideId)}>
+                              <Text style={styles.inlineVerifyBtnText}>Go</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.inlineCancelBtn}
+                              onPress={() => {
+                                setVerifyingRideId(null);
+                                setPoolOtpCode('');
+                              }}>
+                              <Text style={styles.inlineCancelBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.verifyOtpBtn}
+                            onPress={() => {
+                              setVerifyingRideId(riderRide.rideId);
+                              setPoolOtpCode('');
+                            }}>
+                            <Text style={styles.verifyOtpBtnText}>Verify OTP</Text>
+                          </TouchableOpacity>
+                        )
+                      )
+                    )}
+                    {isStarted && (
+                      <Text style={styles.boardedText}>🟢 Boarded</Text>
+                    )}
+                    <TouchableOpacity
+                      style={styles.riderListCallBtn}
+                      onPress={() => Alert.alert('Calling Rider', `Dialing: ${rider.user?.phone || rider.phone}`)}>
+                      <Text style={{ fontSize: 14 }}>📞</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.riderListInfo}>
-                  <Text style={styles.riderListName}>{rider.user?.name || 'Rider'}</Text>
-                  <Text style={styles.riderListDrop} numberOfLines={1}>➔ {rider.dropoff?.address}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.riderListCallBtn}
-                  onPress={() => Alert.alert('Calling Rider', `Dialing: ${rider.user?.phone}`)}>
-                  <Text style={{ fontSize: 14 }}>📞</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
 
           {isMatched && (
@@ -604,11 +725,27 @@ export const CaptainDashboardScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.poolActionBtn}
               onPress={handleStartPool}
-              disabled={isRideActionLoading}>
+              disabled={isRideActionLoading || !activePoolDetails.riders?.length || !activePoolDetails.riders.every((rider: any) => {
+                const rRide = activePoolRides.find((r: any) => r.riderId === (rider.user?._id || rider.user));
+                return rRide ? (rRide.status === 'otp_verified' || rRide.status === 'in_progress') : false;
+              })}>
               <LinearGradient
-                colors={['#FFC72C', '#F8B100']}
+                colors={
+                  (!activePoolDetails.riders?.length || !activePoolDetails.riders.every((rider: any) => {
+                    const rRide = activePoolRides.find((r: any) => r.riderId === (rider.user?._id || rider.user));
+                    return rRide ? (rRide.status === 'otp_verified' || rRide.status === 'in_progress') : false;
+                  }))
+                    ? [Colors.surfaceElevated, Colors.surfaceBorder]
+                    : ['#FFC72C', '#F8B100']
+                }
                 style={styles.poolActionBtnGrad}>
-                <Text style={styles.poolActionBtnText}>
+                <Text style={[
+                  styles.poolActionBtnText,
+                  (!activePoolDetails.riders?.length || !activePoolDetails.riders.every((rider: any) => {
+                    const rRide = activePoolRides.find((r: any) => r.riderId === (rider.user?._id || rider.user));
+                    return rRide ? (rRide.status === 'otp_verified' || rRide.status === 'in_progress') : false;
+                  })) && { color: Colors.textMuted }
+                ]}>
                   {isRideActionLoading ? 'Starting Pool...' : 'Start Trip ➔'}
                 </Text>
               </LinearGradient>
@@ -668,7 +805,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     const status = activeRideDetails.status;
     const isArriving = status === 'accepted';
     const isProgress = status === 'otp_verified' || status === 'in_progress';
-    const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
+    const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗', economy: '⚡🛺' };
 
     return (
       <View style={styles.activeOverlay}>
@@ -1232,5 +1369,63 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
     fontSize: FontSize.base,
     zIndex: 1,
+  },
+  riderListActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  boardedText: {
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    color: Colors.success,
+  },
+  verifyOtpBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+  },
+  verifyOtpBtnText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+  },
+  inlineOtpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  inlineOtpInput: {
+    width: 50,
+    height: 30,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.surfaceBorder,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xs,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    fontSize: 12,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  inlineVerifyBtn: {
+    backgroundColor: Colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.xs,
+  },
+  inlineVerifyBtnText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+  },
+  inlineCancelBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  inlineCancelBtnText: {
+    color: Colors.textMuted,
+    fontSize: 12,
   },
 });

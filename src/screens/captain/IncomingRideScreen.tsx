@@ -89,7 +89,7 @@ export const IncomingRideScreen: React.FC<IncomingRideProps> = ({ onAccept, onRe
 
   if (!req) return null;
 
-  const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗' };
+  const rideIcons: Record<string, string> = { bike: '🏍️', auto: '🛺', cab: '🚗', economy: '⚡🛺' };
 
   return (
     <View style={s.overlay}>
