@@ -32,6 +32,11 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
   const [myRideId, setMyRideId] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
   const matchScale = useRef(new Animated.Value(0)).current;
   const matchOpacity = useRef(new Animated.Value(0)).current;
@@ -58,6 +63,23 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
         const result = await poolService.getPoolDetails(poolId);
         if (!active) return;
         const p = result.data.pool;
+
+        if (p.status === 'cancelled') {
+          Alert.alert(
+            'No Captains Available',
+            'No available E-Rickshaws nearby at this time. Please try booking again.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  navigation.navigate('RiderTabs');
+                }
+              }
+            ]
+          );
+          return;
+        }
+
         setRidersCount(p.riders.length);
         
         if (p.status === 'pending_accept') {
@@ -78,6 +100,11 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
               setMyRideId(myRide.rideId);
             }
           }
+
+          Animated.parallel([
+            Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
+            Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+          ]).start();
         }
       } catch (err) {
         console.warn('Error fetching pool details:', err);
@@ -161,6 +188,13 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
       );
     };
 
+    // Fallback Polling: check every 4 seconds while waiting
+    const pollInterval = setInterval(() => {
+      if (statusRef.current === 'waiting') {
+        fetchDetails();
+      }
+    }, 4000);
+
     const initSocket = async () => {
       try {
         const sock = getSocket() || await connectSocket();
@@ -194,6 +228,7 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
 
     return () => {
       active = false;
+      clearInterval(pollInterval);
       if (socketInstance) {
         socketInstance.off('connect');
         socketInstance.off('pool:updated', poolUpdatedHandler);
@@ -240,9 +275,10 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
           onPress: async () => {
             try {
               await poolService.leavePool(poolId);
-              navigation.navigate('RiderTabs');
             } catch (err) {
-              Alert.alert('Error', 'Failed to leave pool.');
+              console.warn('Failed to leave pool on backend, navigating back anyway:', err);
+            } finally {
+              navigation.navigate('RiderTabs');
             }
           },
         },

@@ -55,4 +55,12 @@ export const captainService = {
     const { data } = await api.post('/captain/rate-rider', { rideId, score, comment });
     return data;
   },
+
+  /**
+   * Get active dispatch/invitation from Redis.
+   */
+  getActiveInvitation: async () => {
+    const { data } = await api.get('/captain/active-invitation');
+    return data;
+  },
 };

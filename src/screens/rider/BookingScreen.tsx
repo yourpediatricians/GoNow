@@ -89,20 +89,24 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [route.params]);
 
-  // Fetch estimate whenever ride type, payment, or locations change
+  // Synchronize initial selections to the store on mount
   useEffect(() => {
     setSelectedRideType(selectedRide);
     setPaymentMethod(selectedPayment);
-    if (pickup && dropoff) {
+  }, []);
+
+  // Fetch estimates only when pickup or dropoff coordinates change
+  useEffect(() => {
+    if (pickup?.latitude && dropoff?.latitude) {
       const timer = setTimeout(() => {
         fetchEstimate().catch((err: any) => {
           const msg = err?.response?.data?.message || err?.message || 'Failed to calculate estimate';
           Alert.alert('Route Unavailable', msg);
         });
-      }, 50);
+      }, 300); // 300ms debounce
       return () => clearTimeout(timer);
     }
-  }, [selectedRide, selectedPayment, pickup, dropoff]);
+  }, [pickup?.latitude, pickup?.longitude, dropoff?.latitude, dropoff?.longitude]);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -215,7 +219,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
               <TouchableOpacity
                 key={ride.id}
                 style={[styles.rideCard, selectedRide === ride.id && styles.rideCardActive]}
-                onPress={() => setSelectedRide(ride.id as RideType)}>
+                onPress={() => {
+                  setSelectedRide(ride.id as RideType);
+                  setSelectedRideType(ride.id as RideType);
+                }}>
                 {selectedRide === ride.id && (
                   <LinearGradient
                     colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
@@ -249,7 +256,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             <TouchableOpacity
               key={pm.id}
               style={[styles.payChip, selectedPayment === pm.id && styles.payChipActive]}
-              onPress={() => setSelectedPayment(pm.id)}>
+              onPress={() => {
+                setSelectedPayment(pm.id);
+                setPaymentMethod(pm.id);
+              }}>
               <Text style={styles.payChipIcon}>{pm.icon}</Text>
               <Text style={[styles.payChipLabel, selectedPayment === pm.id && styles.payChipLabelActive]}>
                 {pm.label}

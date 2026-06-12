@@ -95,10 +95,33 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
-  // Fetch earnings and active pool on mount
+  // Fetch active dispatches/invitations from Redis
+  const fetchActiveInvitation = async () => {
+    try {
+      const res = await captainService.getActiveInvitation();
+      if (res.success && res.data) {
+        const { type, payload } = res.data;
+        if (type === 'ride') {
+          console.log('📡 Recovered active standard ride dispatch:', payload);
+          setIncomingRequest(payload);
+        } else if (type === 'pool') {
+          console.log('📡 Recovered active economy pool dispatch:', payload);
+          setIncomingPoolRequest(payload);
+        } else if (type === 'co_rider') {
+          console.log('📡 Recovered active pool co-rider dispatch:', payload);
+          setPendingRiderRequest(payload);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching active invitation:', err);
+    }
+  };
+
+  // Fetch earnings, active pool, and active invitations on mount
   useEffect(() => {
     fetchEarnings();
     fetchActivePool();
+    fetchActiveInvitation();
   }, []);
 
   // Fetch active ride details when activeRideId changes
@@ -187,6 +210,7 @@ export const CaptainDashboardScreen: React.FC = () => {
             sock.emit('pool:join_room', { poolId: activePoolId });
           }
           fetchActivePool();
+          fetchActiveInvitation();
         });
 
         sock.on(SOCKET_EVENTS.RIDE_NEW_REQUEST, rideReqHandler);
@@ -364,7 +388,9 @@ export const CaptainDashboardScreen: React.FC = () => {
         });
       }
 
-      toggleOnline(true, coords.latitude, coords.longitude).catch(err =>
+      toggleOnline(true, coords.latitude, coords.longitude).then(() => {
+        fetchActiveInvitation();
+      }).catch(err =>
         Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
       );
     } catch (err) {

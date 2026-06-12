@@ -52,6 +52,21 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     }
   };
 
+  const fetchCaptainLocationFallback = async () => {
+    if (!rideId) return;
+    try {
+      const res = await rideService.getCaptainLocation(rideId);
+      if (res.success && res.data) {
+        setCaptainLocation({
+          latitude: res.data.latitude,
+          longitude: res.data.longitude,
+        });
+      }
+    } catch (err) {
+      console.warn('Error fetching captain location fallback:', err);
+    }
+  };
+
   const navigateToComplete = (rideObj: any) => {
     const captainInfo = rideObj.captain || {};
     const formattedRide = {
@@ -93,10 +108,26 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     ).start();
 
     fetchRideDetails();
+    fetchCaptainLocationFallback();
+
+    // Polling fallback: poll every 5 seconds if socket is disconnected
+    const pollInterval = setInterval(() => {
+      const socket = getSocket();
+      if (!socket || !socket.connected) {
+        console.log('📡 Socket disconnected in ActiveRide. Polling captain location...');
+        fetchCaptainLocationFallback();
+      }
+    }, 5000);
 
     // ── Socket event listeners ───────────────────────────────────────────────
     const socket = getSocket();
     if (socket) {
+      socket.on('connect', () => {
+        console.log('📡 Socket reconnected in ActiveRideScreen. Syncing state...');
+        fetchRideDetails();
+        fetchCaptainLocationFallback();
+      });
+
       socket.on(SOCKET_EVENTS.RIDE_STARTED, (data: any) => {
         setStatus('in_progress');
         fetchRideDetails();
@@ -129,7 +160,9 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     }
 
     return () => {
+      clearInterval(pollInterval);
       if (socket) {
+        socket.off('connect');
         socket.off(SOCKET_EVENTS.RIDE_STARTED);
         socket.off(SOCKET_EVENTS.RIDE_COMPLETED);
         socket.off(SOCKET_EVENTS.RIDE_CANCELLED);
@@ -178,23 +211,34 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <DummyMap style={styles.map}>
-        {/* Pickup marker */}
-        <View style={[styles.pickupPin, { position: 'absolute', top: '60%', left: '20%' }]}>
-          <Text style={{ fontSize: 22 }}>📍</Text>
-        </View>
-        {/* Captain marker */}
-        <Animated.View style={[styles.captainPin, { position: 'absolute', top: '38%', left: '44%', transform: [{ scale: pulseAnim }] }]}>
-          <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.captainPinGrad}>
-            <Text style={{ fontSize: 16 }}>{rideEmoji}</Text>
-          </LinearGradient>
-        </Animated.View>
-        {/* Drop marker */}
-        <View style={[styles.dropPin, { position: 'absolute', top: '20%', left: '68%' }]}>
-          <Text style={{ fontSize: 22 }}>🏁</Text>
-        </View>
-        {/* Fake route line */}
-        <View style={styles.fakeRoute} />
+      <DummyMap
+        style={styles.map}
+        captainLocation={captainLocation}
+        pickupLocation={rideDetails?.pickup}
+        dropoffLocation={rideDetails?.dropoff}
+        rideType={rideDetails?.rideType}
+      >
+        {/* Only render mockup absolute overlays if ride details haven't loaded yet */}
+        {!rideDetails && (
+          <>
+            {/* Pickup marker */}
+            <View style={[styles.pickupPin, { position: 'absolute', top: '60%', left: '20%' }]}>
+              <Text style={{ fontSize: 22 }}>📍</Text>
+            </View>
+            {/* Captain marker */}
+            <Animated.View style={[styles.captainPin, { position: 'absolute', top: '38%', left: '44%', transform: [{ scale: pulseAnim }] }]}>
+              <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.captainPinGrad}>
+                <Text style={{ fontSize: 16 }}>{rideEmoji}</Text>
+              </LinearGradient>
+            </Animated.View>
+            {/* Drop marker */}
+            <View style={[styles.dropPin, { position: 'absolute', top: '20%', left: '68%' }]}>
+              <Text style={{ fontSize: 22 }}>🏁</Text>
+            </View>
+            {/* Fake route line */}
+            <View style={styles.fakeRoute} />
+          </>
+        )}
       </DummyMap>
 
       {/* Status Bar */}

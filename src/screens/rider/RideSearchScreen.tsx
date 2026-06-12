@@ -9,6 +9,7 @@ import { RiderStackParamList, CaptainInfo } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { getSocket, SOCKET_EVENTS } from '../../services/socket.service';
 import { useRideStore } from '../../store/rideStore';
+import { rideService } from '../../services/ride.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RideSearch'>;
 const { width } = Dimensions.get('window');
@@ -27,6 +28,55 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const { setCaptain, setRideStatus, availableCaptains, estimatedDistance, estimatedDuration, cancelRide } = useRideStore();
 
+  const phaseRef = useRef(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  const handleRideMatched = (ride: any, captainProfile: any) => {
+    if (phaseRef.current === 'matched') return;
+
+    const captain: CaptainInfo = {
+      id: ride.captain._id || ride.captain,
+      name: ride.captain.name,
+      phone: ride.captain.phone,
+      rating: ride.captain.rating,
+      totalRides: 0,
+      vehicle: captainProfile?.vehicle,
+      distanceFromPickup: undefined,
+    };
+
+    setMatchedCaptain(captain);
+    setCaptain(captain);
+    setRideOtp(ride.otp);
+    setRideStatus('matched');
+    setPhase('matched');
+
+    Animated.parallel([
+      Animated.spring(matchScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
+      Animated.timing(matchOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const syncRideStatus = async () => {
+    try {
+      const res = await rideService.getRideById(rideId);
+      if (res.success && res.data?.ride) {
+        const { ride, captainProfile } = res.data;
+        if (ride.status === 'accepted') {
+          handleRideMatched(ride, captainProfile);
+        } else if (ride.status === 'otp_verified' || ride.status === 'in_progress') {
+          navigation.replace('ActiveRide', { rideId });
+        } else if (ride.status === 'cancelled') {
+          Alert.alert('Ride Cancelled', 'This ride has been cancelled.');
+          navigation.goBack();
+        }
+      }
+    } catch (err) {
+      console.warn('Error syncing ride status:', err);
+    }
+  };
+
   useEffect(() => {
     const dotTimer = setInterval(() => setDotsCount(d => (d % 3) + 1), 500);
     const animPulse = (anim: Animated.Value, delay: number) =>
@@ -37,11 +87,27 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation, route }) => {
       ])).start();
     animPulse(pulse1, 0); animPulse(pulse2, 600); animPulse(pulse3, 1200);
 
+    // Initial check on mount in case it matched while loading
+    syncRideStatus();
+
+    // Fallback Polling: poll every 3 seconds while searching
+    const pollInterval = setInterval(() => {
+      if (phaseRef.current === 'searching') {
+        syncRideStatus();
+      }
+    }, 3000);
+
     // ── Socket: listen for captain acceptance ─────────────────────────────────
     const socket = getSocket();
     if (socket) {
+      socket.on('connect', () => {
+        console.log('📡 Socket reconnected. Checking ride status fallback...');
+        syncRideStatus();
+      });
+
       socket.on(SOCKET_EVENTS.RIDE_ACCEPTED, (data: any) => {
         clearInterval(dotTimer);
+        clearInterval(pollInterval);
         const captain: CaptainInfo = {
           id: data.captain.id,
           name: data.captain.name,
@@ -64,23 +130,28 @@ export const RideSearchScreen: React.FC<Props> = ({ navigation, route }) => {
 
       socket.on(SOCKET_EVENTS.RIDE_CANCELLED, () => {
         clearInterval(dotTimer);
+        clearInterval(pollInterval);
         navigation.goBack();
       });
 
       socket.on(SOCKET_EVENTS.RIDE_REJECTED, (data: any) => {
         clearInterval(dotTimer);
+        clearInterval(pollInterval);
         Alert.alert('No Captain Found', data.reason || 'No captains accepted your request. Please try again.');
         navigation.goBack();
       });
 
       socket.on(SOCKET_EVENTS.RIDE_STARTED, () => {
         clearInterval(dotTimer);
+        clearInterval(pollInterval);
         navigation.replace('ActiveRide', { rideId });
       });
     }
 
     return () => {
       clearInterval(dotTimer);
+      clearInterval(pollInterval);
+      socket?.off('connect');
       socket?.off(SOCKET_EVENTS.RIDE_ACCEPTED);
       socket?.off(SOCKET_EVENTS.RIDE_CANCELLED);
       socket?.off(SOCKET_EVENTS.RIDE_REJECTED);

@@ -41,6 +41,14 @@ export const rideService = {
   },
 
   /**
+   * Get latest captain GPS location (fallback polling method).
+   */
+  getCaptainLocation: async (rideId: string) => {
+    const { data } = await api.get(`/rides/${rideId}/captain-location`);
+    return data;
+  },
+
+  /**
    * Cancel an active ride (rider or captain).
    */
   cancelRide: async (rideId: string, reason?: string) => {
