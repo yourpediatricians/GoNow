@@ -23,6 +23,7 @@ import { RideRequest } from '../../types';
 import { IncomingRideScreen } from './IncomingRideScreen';
 import { rideService } from '../../services/ride.service';
 import { poolService } from '../../services/pool.service';
+import { captainService } from '../../services/captain.service';
 
 const { width } = Dimensions.get('window');
 

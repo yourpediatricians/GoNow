@@ -89,11 +89,14 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [route.params]);
 
-  // Synchronize initial selections to the store on mount
+  // Synchronize selections to the store when they change
   useEffect(() => {
     setSelectedRideType(selectedRide);
+  }, [selectedRide]);
+
+  useEffect(() => {
     setPaymentMethod(selectedPayment);
-  }, []);
+  }, [selectedPayment]);
 
   // Fetch estimates only when pickup or dropoff coordinates change
   useEffect(() => {
@@ -122,7 +125,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleBook = async () => {
-    if (!availableCaptains && availableCaptains === 0) {
+    if (availableCaptains === 0) {
       Alert.alert('No Captains', 'No captains available in your area. Try again in a moment.');
       return;
     }
@@ -226,8 +229,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
                 {selectedRide === ride.id && (
                   <LinearGradient
                     colors={['rgba(255,90,31,0.15)', 'rgba(255,90,31,0.05)']}
-                    style={StyleSheet.absoluteFill}
-                    borderRadius={BorderRadius.md}
+                    style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius.md }]}
                   />
                 )}
                 <Text style={styles.rideIcon}>{ride.icon}</Text>
@@ -248,7 +250,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             );
           })}
         </ScrollView>
-
+ 
         {/* Payment selector */}
         <Text style={styles.sectionLabel}>Payment</Text>
         <View style={styles.paymentRow}>
@@ -257,8 +259,8 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
               key={pm.id}
               style={[styles.payChip, selectedPayment === pm.id && styles.payChipActive]}
               onPress={() => {
-                setSelectedPayment(pm.id);
-                setPaymentMethod(pm.id);
+                setSelectedPayment(pm.id as PaymentMethod);
+                setPaymentMethod(pm.id as PaymentMethod);
               }}>
               <Text style={styles.payChipIcon}>{pm.icon}</Text>
               <Text style={[styles.payChipLabel, selectedPayment === pm.id && styles.payChipLabelActive]}>

@@ -78,7 +78,15 @@ export const useRideStore = create<RideState>((set, get) => ({
 
   setPickup: (pickup) => set({ pickup }),
   setDropoff: (dropoff) => set({ dropoff }),
-  setSelectedRideType: (selectedRideType) => set({ selectedRideType }),
+  setSelectedRideType: (selectedRideType) => {
+    const state = get();
+    set({
+      selectedRideType,
+      estimatedFare: state.estimatedFares[selectedRideType] || 0,
+      estimatedDuration: state.estimatedDurations[selectedRideType] || 0,
+      availableCaptains: state.availableCaptainsMap[selectedRideType] || 0,
+    });
+  },
   setEstimate: (estimatedFare, estimatedDistance, estimatedDuration) =>
     set({ estimatedFare, estimatedDistance, estimatedDuration }),
   setRideStatus: (rideStatus) => set({ rideStatus }),
@@ -136,12 +144,12 @@ export const useRideStore = create<RideState>((set, get) => ({
 
       results.forEach((res, index) => {
         const type = types[index];
-        faresObj[type] = res.data.fare;
-        durationsObj[type] = res.data.duration;
-        captainsObj[type] = res.data.availableCaptains;
+        faresObj[type] = res.data?.fare || 0;
+        durationsObj[type] = res.data?.duration || 0;
+        captainsObj[type] = res.data?.availableCaptains || 0;
         if (index === 0) {
-          distance = res.data.distance;
-          surge = res.data.isSurge;
+          distance = res.data?.distance || 0;
+          surge = res.data?.isSurge || false;
         }
       });
 

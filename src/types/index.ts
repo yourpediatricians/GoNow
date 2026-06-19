@@ -127,12 +127,6 @@ export type AuthStackParamList = {
 export type RiderTabParamList = {
   Home: undefined;
   History: undefined;
-  Profile: undefined;
-};
-
-export type RiderTabParamList = {
-  Home: undefined;
-  History: undefined;
   Wallet: undefined;
   Notifications: undefined;
   Profile: undefined;
@@ -140,7 +134,7 @@ export type RiderTabParamList = {
 
 export type RiderStackParamList = {
   RiderTabs: undefined;
-  Booking: { pickup: Location; dropoff: Location };
+  Booking: { pickup: Location; dropoff: Location; preSelectedRide?: RideType };
   RideSearch: { rideId: string };
   ActiveRide: { rideId: string };
   RideComplete: { rideId: string; fare: number; distance: number; rideType: RideType };
