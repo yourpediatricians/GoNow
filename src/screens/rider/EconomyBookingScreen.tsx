@@ -161,32 +161,7 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
           </View>
         </View>
 
-        {/* Dynamic Time Slot Selector */}
-        <View style={s.card}>
-          <Text style={s.cardLabel}>🕒 Select Time Slot</Text>
-          <Text style={s.cardSubLabel}>Rides are grouped every 10 minutes for optimal pooling</Text>
 
-          <View style={s.slotGrid}>
-            {timeSlots.map((slot) => {
-              const isSelected = selectedSlot === slot;
-              return (
-                <TouchableOpacity
-                  key={slot}
-                  style={[s.slotButton, isSelected && s.slotButtonActive]}
-                  onPress={() => setSelectedSlot(slot)}>
-                  {isSelected && (
-                    <LinearGradient
-                      colors={['#FFC72C', '#F8B100']}
-                      style={StyleSheet.absoluteFillObject}
-                      borderRadius={BorderRadius.md}
-                    />
-                  )}
-                  <Text style={[s.slotText, isSelected && s.slotTextActive]}>{slot}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
 
         {/* Fare Summary Card */}
         <View style={s.card}>

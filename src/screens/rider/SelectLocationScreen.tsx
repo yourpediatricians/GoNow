@@ -20,18 +20,18 @@ import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios';
 
 const RECENT_SEARCHES = [
-  { id: '1', icon: '🕐', label: 'MG Road Metro', sub: 'MG Road, Bengaluru', latitude: 12.9756, longitude: 77.6068 },
-  { id: '2', icon: '🕐', label: 'Whitefield', sub: 'Whitefield, Bengaluru', latitude: 12.9698, longitude: 77.7500 },
-  { id: '3', icon: '🕐', label: 'Kempegowda Airport', sub: 'KIAL, Devanahalli', latitude: 13.1986, longitude: 77.7066 },
+  { id: '1', icon: '🕐', label: 'Dilshad Garden Metro', sub: 'GT Road, Shahdara, Delhi', latitude: 28.6759, longitude: 77.3216 },
+  { id: '2', icon: '🕐', label: 'Maujpur Metro Station', sub: 'Maujpur Main Road, Delhi', latitude: 28.6885, longitude: 77.2764 },
+  { id: '3', icon: '🕐', label: 'Shahdara Metro Station', sub: 'Shahdara, Delhi', latitude: 28.6733, longitude: 77.2897 },
 ];
 
 const POPULAR_PLACES = [
-  { id: 'p1', icon: '🛍️', label: 'Phoenix Mall', sub: 'Whitefield', latitude: 12.9960, longitude: 77.6960 },
-  { id: 'p2', icon: '🏥', label: 'Manipal Hospital', sub: 'Old Airport Rd', latitude: 12.9592, longitude: 77.6436 },
-  { id: 'p3', icon: '🎓', label: 'IIM Bangalore', sub: 'Bannerghatta Rd', latitude: 12.8950, longitude: 77.5996 },
-  { id: 'p4', icon: '🏟️', label: 'Chinnaswamy Stadium', sub: 'MG Road', latitude: 12.9784, longitude: 77.5994 },
-  { id: 'p5', icon: '🌿', label: 'Lalbagh Botanical Garden', sub: 'South Bengaluru', latitude: 12.9507, longitude: 77.5848 },
-  { id: 'p6', icon: '✈️', label: 'Bangalore Airport', sub: 'Devanahalli', latitude: 13.1986, longitude: 77.7066 },
+  { id: 'p1', icon: '🛍️', label: 'Bhajanpura Market', sub: 'Bhajanpura Chowk, Delhi', latitude: 28.7001, longitude: 77.2625 },
+  { id: 'p2', icon: '🏥', label: 'GTB Hospital', sub: 'Dilshad Garden, Delhi', latitude: 28.6841, longitude: 77.3090 },
+  { id: 'p3', icon: '🚇', label: 'Welcome Metro Station', sub: 'Welcome, Delhi', latitude: 28.6719, longitude: 77.2781 },
+  { id: 'p4', icon: '🚇', label: 'Seelampur Metro', sub: 'GT Road, Delhi', latitude: 28.6639, longitude: 77.2678 },
+  { id: 'p5', icon: '🏡', label: 'Yamuna Vihar', sub: 'C-Block, Shahdara, Delhi', latitude: 28.6923, longitude: 77.2662 },
+  { id: 'p6', icon: '🚇', label: 'Gokulpuri Metro', sub: 'Gokulpuri, Delhi', latitude: 28.7032, longitude: 77.2798 },
 ];
 
 export const SelectLocationScreen: React.FC = () => {
@@ -160,9 +160,9 @@ export const SelectLocationScreen: React.FC = () => {
       setDropoff(selectedLoc);
     }
 
-    // If both are set, navigate to Booking, else just pop back
+    // If dropoff is set, navigate to Booking, else just pop back
     const state = useRideStore.getState();
-    if (state.pickup && state.dropoff) {
+    if (state.dropoff) {
       navigation.navigate('Booking', {
         pickup: state.pickup,
         dropoff: state.dropoff,
@@ -211,7 +211,7 @@ export const SelectLocationScreen: React.FC = () => {
     }
 
     const state = useRideStore.getState();
-    if (state.pickup && state.dropoff) {
+    if (state.dropoff) {
       navigation.navigate('Booking', {
         pickup: state.pickup,
         dropoff: state.dropoff,
@@ -279,7 +279,7 @@ export const SelectLocationScreen: React.FC = () => {
         }
 
         const state = useRideStore.getState();
-        if (state.pickup && state.dropoff) {
+        if (state.dropoff) {
           navigation.navigate('Booking', {
             pickup: state.pickup,
             dropoff: state.dropoff,

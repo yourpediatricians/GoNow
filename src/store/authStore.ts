@@ -114,7 +114,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // This is how the routing to onboarding works — no extra flags needed.
       const appUser: User = {
         id: user._id,
-        name: user.name || '',          // empty for new users → triggers onboarding
+        name: isNewUser ? '' : (user.name || ''),          // empty for new users → triggers onboarding
         phone: user.phone,
         role: user.role,
         rating: user.rating || 0.0,

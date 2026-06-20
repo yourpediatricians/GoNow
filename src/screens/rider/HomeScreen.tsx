@@ -39,8 +39,8 @@ const DARK_MAP_STYLE = [
 const QUICK_DESTINATIONS = [
   { id: '1', icon: '🏠', label: 'Home', address: 'Koramangala, Bengaluru', latitude: 12.9352, longitude: 77.6245 },
   { id: '2', icon: '💼', label: 'Office', address: 'Whitefield, Bengaluru', latitude: 12.9698, longitude: 77.7500 },
-  { id: '3', icon: '🛒', label: 'Mall', address: 'Phoenix Mall, Whitefield, Bengaluru', latitude: 12.9960, longitude: 77.6960 },
-  { id: '4', icon: '✈️', label: 'Airport', address: 'Kempegowda Int\'l Airport, Bengaluru', latitude: 13.1986, longitude: 77.7066 },
+  // { id: '3', icon: '🛒', label: 'Mall', address: 'Phoenix Mall, Whitefield, Bengaluru', latitude: 12.9960, longitude: 77.6960 },
+  // { id: '4', icon: '✈️', label: 'Airport', address: 'Kempegowda Int\'l Airport, Bengaluru', latitude: 13.1986, longitude: 77.7066 },
 ];
 
 const SERVICES = [
@@ -48,58 +48,27 @@ const SERVICES = [
     id: 'bike',
     icon: '🏍️',
     title: 'Moto',
-    desc: 'Fast, solo rides',
-    eta: '2 min away',
-    rate: 'From ₹9/km',
+    tagline: 'Solo Ride',
+    desc: 'Avoid traffic jams instantly',
+    price: 'From ₹9/km',
+    themeColor: '#FF5A1F',
+    bgPill: 'rgba(255,90,31,0.12)',
   },
   {
-    id: 'auto',
+    id: 'economy',
     icon: '🛺',
-    title: 'Auto',
-    desc: 'Doorstep pick-up',
-    eta: '4 min away',
-    rate: 'From ₹13/km',
-  },
-  {
-    id: 'cab',
-    icon: '🚗',
-    title: 'Cab',
-    desc: 'Comfy AC rides',
-    eta: '5 min away',
-    rate: 'From ₹18/km',
-  },
-];
-
-const BANNERS = [
-  {
-    id: 'b1',
-    emoji: '⚡',
-    title: '50% Off Moto Rides',
-    desc: 'Use code MOTO50 on first 3 solo rides.',
-    bg: ['#2E1000', '#1F0B00'],
-    borderColor: 'rgba(255,90,31,0.2)',
-  },
-  {
-    id: 'b2',
-    emoji: '🛡️',
-    title: 'Safety First',
-    desc: 'Verified captains. Clean helmet provided.',
-    bg: ['#0A2E1A', '#061F11'],
-    borderColor: 'rgba(34,197,94,0.2)',
-  },
-  {
-    id: 'b3',
-    emoji: '🌱',
-    title: 'Go Green with GoNow',
-    desc: 'Beat city traffic and reduce emissions.',
-    bg: ['#0A1A2E', '#06111F'],
-    borderColor: 'rgba(59,130,246,0.2)',
+    title: 'E-Rickshaw',
+    tagline: 'Shared Pool',
+    desc: 'Eco-friendly flat rate',
+    price: 'Flat ₹15',
+    themeColor: '#F8B100',
+    bgPill: 'rgba(248,177,0,0.12)',
   },
 ];
 
 export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { user } = useAuthStore();
-  const { setPickup, setDropoff } = useRideStore();
+  const { pickup, setPickup, setDropoff } = useRideStore();
   const mapRef = useRef<any>(null);
 
   // Request location permission & get current location on mount
@@ -154,10 +123,14 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   };
 
   const handleSelectService = (serviceId: string) => {
-    navigation.navigate('SelectLocation', {
-      type: 'dropoff',
-      preSelectedRide: serviceId,
-    });
+    if (serviceId === 'economy') {
+      navigation.navigate('EconomyBooking', { direction: 'to_metro' });
+    } else {
+      navigation.navigate('SelectLocation', {
+        type: 'dropoff',
+        preSelectedRide: serviceId,
+      });
+    }
   };
 
   const handleQuickDest = (dest: any) => {
@@ -196,12 +169,11 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map */}
-      <DummyMap style={styles.map}>
-        {/* Pins rendered inside dummy map */}
-        <View style={[styles.myLocationPin, { position: 'absolute', top: '30%', left: '38%' }]}>
-          <View style={styles.myLocationDot} />
-        </View>
-      </DummyMap>
+      <DummyMap
+        style={styles.map}
+        latitude={pickup?.latitude || undefined}
+        longitude={pickup?.longitude || undefined}
+      />
 
       {/* Top overlay */}
       <View style={styles.topOverlay}>
@@ -224,10 +196,7 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Locate me button */}
-      <TouchableOpacity style={styles.locateBtn}>
-        <Text style={styles.locateBtnText}>📍</Text>
-      </TouchableOpacity>
+
 
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
@@ -239,42 +208,6 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
             <Text style={styles.searchArrowText}>→</Text>
           </View>
         </TouchableOpacity>
-
-        {/* E-Rickshaw Pooling Widget */}
-        <View style={styles.poolingSection}>
-          <Text style={styles.poolingLabel}>🛺 GoNow Shared Economy (E-Rickshaw)</Text>
-          <View style={styles.poolingCardsRow}>
-            {/* Go to Metro Card */}
-            <TouchableOpacity 
-              style={[styles.poolingCard, styles.metroCard]} 
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('EconomyBooking', { direction: 'to_metro' })}>
-              <LinearGradient
-                colors={['#FFC72C', '#F8B100']}
-                style={StyleSheet.absoluteFillObject}
-                borderRadius={BorderRadius.md}
-              />
-              <View style={styles.poolingCardHeader}>
-                <Text style={styles.poolingCardIcon}>🚉</Text>
-                <Text style={styles.poolingCardTitleMetro}>Go to Metro</Text>
-              </View>
-              <Text style={styles.poolingCardDescMetro}>चलो, आज का सफर शुरू करें</Text>
-            </TouchableOpacity>
-
-            {/* Go Home Card */}
-            <TouchableOpacity 
-              style={[styles.poolingCard, styles.homeCard]} 
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('EconomyBooking', { direction: 'to_home' })}>
-              <View style={styles.poolingCardHeader}>
-                <Text style={styles.poolingCardIcon}>🏠</Text>
-                <Text style={styles.poolingCardTitleHome}>Go Home</Text>
-              </View>
-              <Text style={styles.poolingCardDescHome}>स्टेशन से घर जाओ</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Quick destinations */}
         <ScrollView
           horizontal
@@ -295,51 +228,27 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
             {SERVICES.map(service => (
               <TouchableOpacity
                 key={service.id}
-                style={styles.serviceCard}
+                style={[
+                  styles.serviceCard,
+                  { borderColor: service.themeColor + '33' }
+                ]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectService(service.id)}>
-                <View style={styles.serviceIconContainer}>
+                <View style={[styles.serviceIconContainer, { backgroundColor: service.bgPill, borderColor: service.themeColor + '44' }]}>
                   <Text style={styles.serviceIcon}>{service.icon}</Text>
                 </View>
                 <Text style={styles.serviceTitle}>{service.title}</Text>
+                <View style={[styles.taglineBadge, { backgroundColor: service.bgPill }]}>
+                  <Text style={[styles.taglineText, { color: service.themeColor }]}>{service.tagline}</Text>
+                </View>
                 <Text style={styles.serviceDesc}>{service.desc}</Text>
-                <View style={styles.serviceFooter}>
-                  <Text style={styles.serviceEta}>{service.eta}</Text>
-                  <Text style={styles.serviceRate}>{service.rate}</Text>
+                <View style={[styles.pricePill, { backgroundColor: service.themeColor }]}>
+                  <Text style={styles.pricePillText}>{service.price}</Text>
                 </View>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-
-        {/* Banners Row */}
-        <View style={styles.bannersSection}>
-          <Text style={styles.sectionLabel}>Offers & Safety</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.bannersRow}>
-            {BANNERS.map(banner => (
-              <View
-                key={banner.id}
-                style={[
-                  styles.bannerCard,
-                  { borderColor: banner.borderColor }
-                ]}>
-                <LinearGradient
-                  colors={banner.bg as [string, string, ...string[]]}
-                  style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius.md }]}
-                />
-                <View style={styles.bannerHeader}>
-                  <Text style={styles.bannerEmoji}>{banner.emoji}</Text>
-                  <Text style={styles.bannerTitle}>{banner.title}</Text>
-                </View>
-                <Text style={styles.bannerDesc}>{banner.desc}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
+        </View>      </View>
     </View>
   );
 };
@@ -433,7 +342,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  searchArrowText: { color: Colors.white, fontSize: FontSize.base },
+  searchArrowText: { color: Colors.white, fontSize: FontSize.lg },
   quickRow: { gap: Spacing.sm, paddingBottom: Spacing.md },
   quickChip: {
     alignItems: 'center',
@@ -490,24 +399,33 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     height: 24,
+    marginBottom: 4,
   },
-  serviceFooter: {
-    alignItems: 'center',
-    marginTop: 4,
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
-    paddingTop: 4,
+  taglineBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginTop: 2,
+    marginBottom: 4,
   },
-  serviceEta: {
-    fontSize: 10,
-    fontWeight: FontWeight.semiBold,
-    color: Colors.success,
-  },
-  serviceRate: {
+  taglineText: {
     fontSize: 9,
-    color: Colors.textMuted,
-    marginTop: 1,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  pricePill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xs,
+    width: '90%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pricePillText: {
+    color: '#FFFFFF',
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
   },
 
   bannersSection: {},

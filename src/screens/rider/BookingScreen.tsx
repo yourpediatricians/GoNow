@@ -39,22 +39,6 @@ const RIDE_OPTIONS = [
     surgePrice: null,
     capacity: 1,
   },
-  {
-    id: 'auto',
-    icon: '🛺',
-    label: 'Auto',
-    desc: 'Affordable comfort',
-    surgePrice: null,
-    capacity: 3,
-  },
-  {
-    id: 'cab',
-    icon: '🚗',
-    label: 'Cab',
-    desc: 'AC • Premium ride',
-    surgePrice: 210,
-    capacity: 4,
-  },
 ];
 
 const PAYMENT_METHODS = [
@@ -65,7 +49,7 @@ const PAYMENT_METHODS = [
 
 export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedRide, setSelectedRide] = useState<RideType>(
-    route.params?.preSelectedRide || 'auto'
+    route.params?.preSelectedRide || 'bike'
   );
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [isBooking, setIsBooking] = useState(false);
@@ -125,6 +109,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleBook = async () => {
+    if (selectedRide === 'economy') {
+      navigation.navigate('EconomyBooking', { direction: 'to_metro' });
+      return;
+    }
     if (availableCaptains === 0) {
       Alert.alert('No Captains', 'No captains available in your area. Try again in a moment.');
       return;
@@ -148,20 +136,26 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   const displayDistance = estimatedDistance || 0;
   const displayDuration = estimatedDurations[selectedRide];
 
+  const mapPickup = pickup ? {
+    coordinates: [pickup.longitude, pickup.latitude] as [number, number],
+    address: pickup.address,
+  } : null;
+
+  const mapDropoff = dropoff ? {
+    coordinates: [dropoff.longitude, dropoff.latitude] as [number, number],
+    address: dropoff.address,
+  } : null;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <DummyMap style={styles.map}>
-        {/* Pickup pin */}
-        <View style={[styles.pickupPin, { position: 'absolute', top: '30%', left: '42%' }]}>
-          <View style={styles.pickupDot} />
-        </View>
-        {/* Drop pin */}
-        <View style={[styles.dropPin, { position: 'absolute', top: '62%', left: '28%' }]}>
-          <Text style={{ fontSize: 24 }}>📍</Text>
-        </View>
-      </DummyMap>
+      <DummyMap
+        style={styles.map}
+        pickupLocation={mapPickup}
+        dropoffLocation={mapDropoff}
+        rideType={selectedRide}
+      />
 
       {/* Back button */}
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -175,7 +169,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
           <TouchableOpacity style={styles.routeRow} onPress={() => handleEditLocation('pickup')} activeOpacity={0.7}>
             <View style={styles.routeDotPickup} />
             <Text style={styles.routeText} numberOfLines={1}>
-              {pickup?.address || 'Loading pickup location...'}
+              {pickup?.address || 'Tap to set pickup location...'}
             </Text>
             <Text style={styles.editArrow}>✏️</Text>
           </TouchableOpacity>
@@ -188,7 +182,11 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.editArrow}>✏️</Text>
           </TouchableOpacity>
           <View style={styles.routeMeta}>
-            {error ? (
+            {!pickup ? (
+              <Text style={[styles.routeMetaText, { color: Colors.warning, fontWeight: FontWeight.bold }]}>
+                ⚠️ Please select pickup location
+              </Text>
+            ) : error ? (
               <Text style={[styles.routeMetaText, { color: Colors.error, fontWeight: FontWeight.bold }]}>
                 ⚠️ {error}
               </Text>
@@ -274,17 +272,17 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
         <TouchableOpacity
           style={styles.bookBtn}
           activeOpacity={0.9}
-          disabled={isBooking || isLoading || !!error}
+          disabled={isBooking || isLoading || !!error || !pickup}
           onPress={handleBook}>
           <LinearGradient
-            colors={!!error ? [Colors.surfaceElevated, Colors.surfaceBorder] : [Colors.primaryLight, Colors.primary, Colors.primaryDark]}
+            colors={(!pickup || !!error) ? [Colors.surfaceElevated, Colors.surfaceBorder] : [Colors.primaryLight, Colors.primary, Colors.primaryDark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.bookBtnGrad}>
-            <Text style={[styles.bookBtnText, (!!error || isLoading) && { color: Colors.textMuted }]}>
-              {isBooking ? 'Booking...' : !!error ? 'Route Unavailable' : isLoading ? 'Calculating...' : `Book ${selected.icon} · ₹${displayFare}`}
+            <Text style={[styles.bookBtnText, (!pickup || !!error || isLoading) && { color: Colors.textMuted }]}>
+              {isBooking ? 'Booking...' : !pickup ? 'Select Pickup Location' : !!error ? 'Route Unavailable' : isLoading ? 'Calculating...' : `Book ${selected.icon} · ₹${displayFare}`}
             </Text>
-            {!error && !isLoading && <Text style={styles.bookBtnArrow}>→</Text>}
+            {pickup && !error && !isLoading && <Text style={styles.bookBtnArrow}>→</Text>}
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>

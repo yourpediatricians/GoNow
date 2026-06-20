@@ -14,8 +14,6 @@ type Step = 'personal' | 'vehicle' | 'documents' | 'done';
 
 const VEHICLE_TYPES = [
   { id: 'bike', icon: '🏍️', label: 'Bike' },
-  { id: 'auto', icon: '🛺', label: 'Auto' },
-  { id: 'cab', icon: '🚗', label: 'Cab' },
   { id: 'economy', icon: '⚡🛺', label: 'E-Rickshaw' },
 ];
 

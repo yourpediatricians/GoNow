@@ -87,6 +87,18 @@ export const DummyMap: React.FC<DummyMapProps> = ({
       }
     }
   }, [captainLocation, pickupLocation, dropoffLocation]);
+ 
+  // Animate to latitude/longitude when they change and no active ride/booking coordinates are present
+  useEffect(() => {
+    if (mapRef.current && !pickupLocation && !dropoffLocation && !captainLocation) {
+      mapRef.current.animateToRegion({
+        latitude,
+        longitude,
+        latitudeDelta,
+        longitudeDelta,
+      }, 1000);
+    }
+  }, [latitude, longitude, pickupLocation, dropoffLocation, captainLocation]);
 
   const isBike = rideType === 'bike';
   const rideEmoji = isBike ? '🏍️' : rideType === 'auto' || rideType === 'economy' ? '🛺' : '🚗';
