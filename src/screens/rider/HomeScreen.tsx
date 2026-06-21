@@ -20,6 +20,7 @@ import { RiderStackParamList } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { geocodingService } from '../../services/geocoding.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RiderTabs'> & { navigation: any };
 
@@ -99,13 +100,14 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       }
 
       Geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
+          const address = await geocodingService.reverseGeocode(lat, lng);
           const loc = {
             latitude: lat,
             longitude: lng,
-            address: 'Current Location (GPS)',
+            address,
             name: 'My Location',
           };
           setPickup(loc); // pre-fill pickup in store
@@ -136,10 +138,10 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const handleQuickDest = (dest: any) => {
     const { pickup } = useRideStore.getState();
     const activePickup = pickup || {
-      latitude: 12.9716,
-      longitude: 77.5946,
-      address: 'Current Location (GPS)',
-      name: 'My Location',
+      latitude: 28.6719,
+      longitude: 77.2781,
+      address: 'Welcome Metro Station, Welcome, Delhi',
+      name: 'Welcome Metro',
     };
     
     setPickup(activePickup);

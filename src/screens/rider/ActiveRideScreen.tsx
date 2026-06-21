@@ -29,7 +29,7 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
   const { cancelRide } = useRideStore();
 
   const fetchRideDetails = async () => {
-    if (!rideId) return;
+    if (!rideId) return null;
     try {
       const res = await rideService.getRideById(rideId);
       if (res.success && res.data) {
@@ -46,10 +46,12 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
           Alert.alert('Ride Cancelled', 'This ride has been cancelled.');
           navigation.navigate('Home');
         }
+        return ride;
       }
     } catch (err) {
       console.error('Error fetching active ride details:', err);
     }
+    return null;
   };
 
   const fetchCaptainLocationFallback = async () => {
@@ -136,13 +138,16 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
       socket.on(SOCKET_EVENTS.RIDE_COMPLETED, (data: any) => {
         setStatus('completed');
         // Fetch final details first, then navigate
-        fetchRideDetails().then(() => {
-          if (rideDetails) {
-            navigateToComplete({ ...rideDetails, status: 'completed' });
-          } else {
-            // Fallback navigation with incoming socket data
-            navigateToComplete(data.ride || { _id: rideId, status: 'completed' });
-          }
+        fetchRideDetails().then((latestRide) => {
+          const finalRide = latestRide || rideDetails || {};
+          navigateToComplete({
+            ...finalRide,
+            _id: rideId,
+            status: 'completed',
+            fare: finalRide.fare || { actual: data.fare || 0 },
+            distance: finalRide.distance || data.distance || 0,
+            actualDuration: finalRide.actualDuration || data.duration || 0,
+          });
         });
       });
 

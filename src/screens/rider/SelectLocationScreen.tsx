@@ -18,6 +18,7 @@ import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../
 import { GOOGLE_MAPS_API_KEY } from '../../config/api.config';
 import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios';
+import { geocodingService } from '../../services/geocoding.service';
 
 const RECENT_SEARCHES = [
   { id: '1', icon: '🕐', label: 'Dilshad Garden Metro', sub: 'GT Road, Shahdara, Delhi', latitude: 28.6759, longitude: 77.3216 },
@@ -250,11 +251,12 @@ export const SelectLocationScreen: React.FC = () => {
     }
 
     Geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        const address = await geocodingService.reverseGeocode(lat, lng);
         const currentLoc = {
-          address: 'Current Location (GPS)',
+          address,
           name: 'My Location',
           latitude: lat,
           longitude: lng,

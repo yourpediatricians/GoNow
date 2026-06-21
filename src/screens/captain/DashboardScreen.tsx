@@ -55,6 +55,23 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [verifyingRideId, setVerifyingRideId] = useState<string | null>(null);
   const [poolOtpCode, setPoolOtpCode] = useState<string>('');
 
+  const formatIncomingPoolRequest = async (payload: any) => {
+    if (!payload || !payload.poolId) return payload;
+    try {
+      const res = await poolService.getPoolDetails(payload.poolId);
+      if (res.success && res.data?.pool) {
+        const pool = res.data.pool;
+        return {
+          ...payload,
+          riders: pool.riders || [],
+        };
+      }
+    } catch (err) {
+      console.warn('Error formatting incoming pool request:', err);
+    }
+    return payload;
+  };
+
   const maxEarning = weeklyEarnings.length
     ? Math.max(...weeklyEarnings.map(d => d.amount), 1)
     : 1;
@@ -107,7 +124,9 @@ export const CaptainDashboardScreen: React.FC = () => {
           setIncomingRequest(payload);
         } else if (type === 'pool') {
           console.log('📡 Recovered active economy pool dispatch:', payload);
-          setIncomingPoolRequest(payload);
+          formatIncomingPoolRequest(payload).then((formatted) => {
+            setIncomingPoolRequest(formatted);
+          });
         } else if (type === 'co_rider') {
           console.log('📡 Recovered active pool co-rider dispatch:', payload);
           setPendingRiderRequest(payload);
@@ -161,7 +180,9 @@ export const CaptainDashboardScreen: React.FC = () => {
     };
 
     const poolReqHandler = (data: any) => {
-      setIncomingPoolRequest(data);
+      formatIncomingPoolRequest(data).then((formatted) => {
+        setIncomingPoolRequest(formatted);
+      });
     };
 
     const poolCancelHandler = (data: any) => {
@@ -556,13 +577,31 @@ export const CaptainDashboardScreen: React.FC = () => {
           </LinearGradient>
 
           <View style={styles.poolRequestDetails}>
-            <Text style={styles.poolReqDetailLabel}>ROUTE</Text>
-            <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.route}</Text>
-            
-            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>BOARDING PICKUP POINT</Text>
-            <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.pickupPoint}</Text>
+            {incomingPoolRequest.riders && incomingPoolRequest.riders.length > 0 ? (
+              <ScrollView style={{ maxHeight: 200, marginBottom: Spacing.xs }} showsVerticalScrollIndicator={false}>
+                {incomingPoolRequest.riders.map((r: any, i: number) => (
+                  <View key={i} style={{ marginBottom: Spacing.sm, paddingBottom: Spacing.xs, borderBottomWidth: i < incomingPoolRequest.riders.length - 1 ? 1 : 0, borderBottomColor: Colors.surfaceBorder }}>
+                    <Text style={[styles.poolReqDetailLabel, { fontSize: 11, color: Colors.primary }]}>
+                      PASSENGER {i + 1}: {r.user?.name || 'Rider'}
+                    </Text>
+                    <Text style={[styles.poolReqDetailLabel, { marginTop: 2, fontSize: 10 }]}>PICKUP</Text>
+                    <Text style={[styles.poolReqDetailVal, { fontSize: FontSize.sm }]} numberOfLines={1}>{r.pickup?.address}</Text>
+                    <Text style={[styles.poolReqDetailLabel, { marginTop: 2, fontSize: 10 }]}>DROP-OFF</Text>
+                    <Text style={[styles.poolReqDetailVal, { fontSize: FontSize.sm }]} numberOfLines={1}>{r.dropoff?.address}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <>
+                <Text style={styles.poolReqDetailLabel}>ROUTE</Text>
+                <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.route}</Text>
+                
+                <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>BOARDING PICKUP POINT</Text>
+                <Text style={styles.poolReqDetailVal}>{incomingPoolRequest.pickupPoint}</Text>
+              </>
+            )}
 
-            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.md }]}>ESTIMATED EARNINGS</Text>
+            <Text style={[styles.poolReqDetailLabel, { marginTop: Spacing.sm }]}>ESTIMATED EARNINGS</Text>
             <Text style={[styles.poolReqDetailVal, { fontSize: FontSize.lg, color: Colors.success, fontWeight: FontWeight.black }]}>
               ₹{incomingPoolRequest.earnings}
             </Text>
@@ -681,7 +720,8 @@ export const CaptainDashboardScreen: React.FC = () => {
                   </View>
                   <View style={styles.riderListInfo}>
                     <Text style={styles.riderListName}>{rider.user?.name || 'Rider'}</Text>
-                    <Text style={styles.riderListDrop} numberOfLines={1}>➔ {rider.dropoff?.address}</Text>
+                    <Text style={styles.riderListPickup} numberOfLines={1}>📍 {rider.pickup?.address}</Text>
+                    <Text style={styles.riderListDrop} numberOfLines={1}>🏁 {rider.dropoff?.address}</Text>
                   </View>
                   <View style={styles.riderListActions}>
                     {riderRide && isMatched && (
@@ -1222,6 +1262,7 @@ const styles = StyleSheet.create({
   riderMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   activeCallBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
   activeRouteCard: { padding: Spacing.xl, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: Spacing.sm },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   dotPickup: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
   dotDrop: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.error },
   routeLine: { width: 2, height: 16, backgroundColor: Colors.surfaceBorder, marginLeft: 4, marginVertical: 2 },
@@ -1303,6 +1344,11 @@ const styles = StyleSheet.create({
   riderListDrop: {
     fontSize: 10,
     color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  riderListPickup: {
+    fontSize: 10,
+    color: Colors.textMuted,
     marginTop: 2,
   },
   riderListCallBtn: {
