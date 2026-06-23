@@ -103,13 +103,16 @@ export const CaptainDashboardScreen: React.FC = () => {
         if (socket) {
           socket.emit('pool:join_room', { poolId: res.data.pool._id });
         }
+        return res.data;
       } else {
         setActivePoolDetails(null);
         setActivePoolId(null);
         setActivePoolRides([]);
+        return null;
       }
     } catch (err) {
       console.error('Error fetching active pool details:', err);
+      return null;
     }
   };
 
@@ -564,6 +567,38 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
+  const handleCompleteRiderRide = async (rideId: string) => {
+    setIsRideActionLoading(true);
+    try {
+      const res = await rideService.completeRide(rideId);
+      if (res.success) {
+        Alert.alert('Success', 'Rider\'s ride completed successfully!');
+        
+        // Refresh pool and check if all rides are completed
+        const poolData = await fetchActivePool();
+        fetchEarnings(); // refresh dashboard stats/earnings
+        
+        if (poolData && poolData.rides) {
+          const allCompleted = poolData.rides.every((r: any) => r.status === 'completed');
+          if (allCompleted && poolData.pool?._id) {
+            // All riders completed! Complete the entire pool on the backend
+            console.log('⚡ All riders completed. Completing pool:', poolData.pool._id);
+            await poolService.completePool(poolData.pool._id);
+            // Clear pool states
+            setActivePoolId(null);
+            setActivePoolDetails(null);
+            setActivePoolRides([]);
+            Alert.alert('Pool Completed', 'All passenger rides completed! Pool trip ended.');
+          }
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to complete rider\'s ride.');
+    } finally {
+      setIsRideActionLoading(false);
+    }
+  };
+
   const renderIncomingPoolRequestModal = () => {
     if (!incomingPoolRequest) return null;
     return (
@@ -712,6 +747,7 @@ export const CaptainDashboardScreen: React.FC = () => {
               const isOtpVerified = riderRide
                 ? (riderRide.status === 'otp_verified' || riderRide.status === 'in_progress' || riderRide.status === 'completed')
                 : false;
+              const isCompleted = riderRide ? (riderRide.status === 'completed') : false;
 
               return (
                 <View key={idx} style={styles.riderListItem}>
@@ -766,7 +802,20 @@ export const CaptainDashboardScreen: React.FC = () => {
                       )
                     )}
                     {isStarted && (
-                      <Text style={styles.boardedText}>🟢 Boarded</Text>
+                      isCompleted ? (
+                        <Text style={styles.boardedText}>✅ Completed</Text>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.completeRiderBtn}
+                          onPress={() => {
+                            if (riderRide?.rideId) {
+                              handleCompleteRiderRide(riderRide.rideId);
+                            }
+                          }}
+                          disabled={isRideActionLoading}>
+                          <Text style={styles.completeRiderBtnText}>Complete</Text>
+                        </TouchableOpacity>
+                      )
                     )}
                     <TouchableOpacity
                       style={styles.riderListCallBtn}
@@ -820,18 +869,11 @@ export const CaptainDashboardScreen: React.FC = () => {
           )}
 
           {isStarted && (
-            <TouchableOpacity
-              style={styles.poolActionBtn}
-              onPress={handleCompletePool}
-              disabled={isRideActionLoading}>
-              <LinearGradient
-                colors={[Colors.success, '#16A34A']}
-                style={styles.poolActionBtnGrad}>
-                <Text style={styles.poolActionBtnText}>
-                  {isRideActionLoading ? 'Completing Pool...' : '✓ Complete Pool'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+            <View style={{ padding: Spacing.md, alignItems: 'center' }}>
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, fontStyle: 'italic' }}>
+                Trip in progress. Complete each passenger's ride in the list above.
+              </Text>
+            </View>
           )}
         </View>
       </View>
@@ -1351,6 +1393,20 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
   },
+  completeRiderBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#16A34A',
+    marginRight: 4,
+  },
+  completeRiderBtnText: {
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+    color: '#16A34A',
+  },
   riderListCallBtn: {
     width: 32, height: 32,
     borderRadius: 16,
@@ -1475,7 +1531,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderColor: Colors.surfaceBorder,
     borderWidth: 1,
-    borderRadius: BorderRadius.xs,
+    borderRadius: BorderRadius.sm,
     paddingHorizontal: 4,
     paddingVertical: 2,
     fontSize: 12,
@@ -1486,7 +1542,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.success,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: BorderRadius.xs,
+    borderRadius: BorderRadius.sm,
   },
   inlineVerifyBtnText: {
     color: Colors.white,
