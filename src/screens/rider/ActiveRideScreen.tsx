@@ -198,6 +198,40 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     );
   };
 
+  const getEtaMinutes = () => {
+    if (!captainLocation) return 3;
+    
+    let targetCoords = null;
+    if (status === 'arriving') {
+      targetCoords = rideDetails?.pickup?.coordinates;
+    } else if (status === 'in_progress') {
+      targetCoords = rideDetails?.dropoff?.coordinates;
+    }
+    
+    if (!targetCoords || targetCoords.length < 2) return 3;
+    
+    const targetLat = targetCoords[1];
+    const targetLng = targetCoords[0];
+    
+    const lat1 = captainLocation.latitude;
+    const lon1 = captainLocation.longitude;
+    
+    // Haversine distance
+    const R = 6371; // Earth radius in km
+    const dLat = (targetLat - lat1) * Math.PI / 180;
+    const dLon = (targetLng - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(targetLat * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distanceKm = R * c;
+    
+    // Assumed speed: 20 km/h -> 3 mins per km
+    const minutes = Math.ceil(distanceKm * 3);
+    return minutes > 0 ? minutes : 1;
+  };
+
   const STATUS_CONFIG = {
     arriving: { label: 'Captain is arriving', color: Colors.warning, emoji: '🏍️' },
     in_progress: { label: 'Ride in progress', color: Colors.success, emoji: '🚀' },
@@ -222,6 +256,7 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
         pickupLocation={rideDetails?.pickup}
         dropoffLocation={rideDetails?.dropoff}
         rideType={rideDetails?.rideType}
+        rideStatus={status}
       >
         {/* Only render mockup absolute overlays if ride details haven't loaded yet */}
         {!rideDetails && (
@@ -250,8 +285,8 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
       <View style={styles.statusBar}>
         <View style={[styles.statusDot, { backgroundColor: config.color }]} />
         <Text style={styles.statusText}>{config.label}</Text>
-        {status === 'arriving' && (
-          <Text style={styles.etaText}>~3 min</Text>
+        {(status === 'arriving' || status === 'in_progress') && (
+          <Text style={styles.etaText}>~{getEtaMinutes()} min</Text>
         )}
       </View>
 

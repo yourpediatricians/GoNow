@@ -27,12 +27,6 @@ import { captainService } from '../../services/captain.service';
 
 const { width } = Dimensions.get('window');
 
-const RECENT_RIDES = [
-  { id: '1', from: 'Koramangala', to: 'MG Road', fare: 85, time: '9:15 AM', duration: '14 min', type: '🏍️' },
-  { id: '2', from: 'HSR Layout', to: 'Silk Board', fare: 110, time: '8:00 AM', duration: '20 min', type: '🏍️' },
-  { id: '3', from: 'BTM Layout', to: 'Jayanagar', fare: 70, time: '7:20 AM', duration: '12 min', type: '🏍️' },
-];
-
 export const CaptainDashboardScreen: React.FC = () => {
   const {
     isOnline, toggleOnline, fetchEarnings,
@@ -54,6 +48,7 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [activePoolRides, setActivePoolRides] = useState<any[]>([]);
   const [verifyingRideId, setVerifyingRideId] = useState<string | null>(null);
   const [poolOtpCode, setPoolOtpCode] = useState<string>('');
+  const [recentRides, setRecentRides] = useState<any[]>([]);
 
   const formatIncomingPoolRequest = async (payload: any) => {
     if (!payload || !payload.poolId) return payload;
@@ -140,11 +135,46 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
+  const fetchRecentRides = async () => {
+    try {
+      const res = await captainService.getRideHistory(1, 5);
+      if (res.success && res.data) {
+        const list = res.data.history || res.data;
+        if (Array.isArray(list)) {
+          setRecentRides(list);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching recent rides:', err);
+    }
+  };
+
+  const getRideTypeEmoji = (type: string) => {
+    switch (type) {
+      case 'bike': return '🏍️';
+      case 'economy': return '🛺';
+      case 'auto': return '🛺';
+      case 'cab': return '🚗';
+      default: return '🏍️';
+    }
+  };
+
+  const getRideTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Fetch earnings, active pool, and active invitations on mount
   useEffect(() => {
     fetchEarnings();
     fetchActivePool();
     fetchActiveInvitation();
+    fetchRecentRides();
   }, []);
 
   // Fetch active ride details when activeRideId changes
@@ -455,6 +485,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         setActiveRideId(null);
         setActiveRideDetails(null);
         fetchEarnings();
+        fetchRecentRides();
       }
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message || 'Failed to complete ride');
@@ -560,6 +591,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       setActivePoolId(null);
       setActivePoolDetails(null);
       fetchEarnings(); // refresh dashboard stats
+      fetchRecentRides();
     } catch (err) {
       Alert.alert('Error', 'Failed to complete pool.');
     } finally {
@@ -577,6 +609,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         // Refresh pool and check if all rides are completed
         const poolData = await fetchActivePool();
         fetchEarnings(); // refresh dashboard stats/earnings
+        fetchRecentRides();
         
         if (poolData && poolData.rides) {
           const allCompleted = poolData.rides.every((r: any) => r.status === 'completed');
@@ -1156,18 +1189,34 @@ export const CaptainDashboardScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Rides</Text>
           <View style={styles.recentList}>
-            {RECENT_RIDES.map(ride => (
-              <View key={ride.id} style={styles.recentCard}>
-                <View style={styles.recentIcon}>
-                  <Text style={{ fontSize: 20 }}>{ride.type}</Text>
-                </View>
-                <View style={styles.recentInfo}>
-                  <Text style={styles.recentRoute}>{ride.from} → {ride.to}</Text>
-                  <Text style={styles.recentMeta}>{ride.time} · {ride.duration}</Text>
-                </View>
-                <Text style={styles.recentFare}>₹{ride.fare}</Text>
+            {recentRides.length > 0 ? (
+              recentRides.map((ride: any) => {
+                const isDbRide = !!ride.pickup;
+                const emoji = isDbRide ? getRideTypeEmoji(ride.rideType) : '🏍️';
+                const fromLabel = isDbRide ? (ride.pickup.name || ride.pickup.address.split(',')[0]) : '';
+                const toLabel = isDbRide ? (ride.dropoff.name || ride.dropoff.address.split(',')[0]) : '';
+                const timeLabel = isDbRide ? getRideTime(ride.date || ride.createdAt) : '';
+                const durationLabel = isDbRide ? `${ride.duration || 10} min` : '';
+                const fareLabel = isDbRide ? (ride.actualFare || ride.fare) : '';
+
+                return (
+                  <View key={ride.id || ride._id} style={styles.recentCard}>
+                    <View style={styles.recentIcon}>
+                      <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                    </View>
+                    <View style={styles.recentInfo}>
+                      <Text style={styles.recentRoute} numberOfLines={1}>{fromLabel} → {toLabel}</Text>
+                      <Text style={styles.recentMeta}>{timeLabel} · {durationLabel}</Text>
+                    </View>
+                    <Text style={styles.recentFare}>₹{fareLabel}</Text>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyRecentCard}>
+                <Text style={styles.emptyRecentText}>No recent rides completed.</Text>
               </View>
-            ))}
+            )}
           </View>
         </View>
 
@@ -1278,6 +1327,19 @@ const styles = StyleSheet.create({
   recentRoute: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textPrimary },
   recentMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   recentFare: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.primary },
+  emptyRecentCard: {
+    padding: Spacing.xl,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  emptyRecentText: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+  },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   actionCard: {
     width: (width - Spacing.xl * 2 - Spacing.sm) / 2,

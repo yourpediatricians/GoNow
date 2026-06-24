@@ -20,6 +20,7 @@ interface DummyMapProps {
   pickupLocation?: { coordinates: [number, number]; address: string } | null;
   dropoffLocation?: { coordinates: [number, number]; address: string } | null;
   rideType?: string;
+  rideStatus?: 'arriving' | 'in_progress' | 'completed';
 }
 
 const DARK_MAP_STYLE = [
@@ -44,6 +45,7 @@ export const DummyMap: React.FC<DummyMapProps> = ({
   pickupLocation,
   dropoffLocation,
   rideType,
+  rideStatus,
 }) => {
   const mapRef = useRef<MapView>(null);
 
@@ -57,23 +59,52 @@ export const DummyMap: React.FC<DummyMapProps> = ({
   useEffect(() => {
     if (mapRef.current && (pickupLocation || dropoffLocation || captainLocation)) {
       const coords: { latitude: number; longitude: number }[] = [];
-      if (pickupLocation?.coordinates) {
-        coords.push({
-          latitude: pickupLocation.coordinates[1],
-          longitude: pickupLocation.coordinates[0],
-        });
-      }
-      if (dropoffLocation?.coordinates) {
-        coords.push({
-          latitude: dropoffLocation.coordinates[1],
-          longitude: dropoffLocation.coordinates[0],
-        });
-      }
-      if (captainLocation?.latitude) {
-        coords.push({
-          latitude: captainLocation.latitude,
-          longitude: captainLocation.longitude,
-        });
+      
+      if (rideStatus === 'arriving') {
+        if (pickupLocation?.coordinates) {
+          coords.push({
+            latitude: pickupLocation.coordinates[1],
+            longitude: pickupLocation.coordinates[0],
+          });
+        }
+        if (captainLocation?.latitude) {
+          coords.push({
+            latitude: captainLocation.latitude,
+            longitude: captainLocation.longitude,
+          });
+        }
+      } else if (rideStatus === 'in_progress') {
+        if (dropoffLocation?.coordinates) {
+          coords.push({
+            latitude: dropoffLocation.coordinates[1],
+            longitude: dropoffLocation.coordinates[0],
+          });
+        }
+        if (captainLocation?.latitude) {
+          coords.push({
+            latitude: captainLocation.latitude,
+            longitude: captainLocation.longitude,
+          });
+        }
+      } else {
+        if (pickupLocation?.coordinates) {
+          coords.push({
+            latitude: pickupLocation.coordinates[1],
+            longitude: pickupLocation.coordinates[0],
+          });
+        }
+        if (dropoffLocation?.coordinates) {
+          coords.push({
+            latitude: dropoffLocation.coordinates[1],
+            longitude: dropoffLocation.coordinates[0],
+          });
+        }
+        if (captainLocation?.latitude) {
+          coords.push({
+            latitude: captainLocation.latitude,
+            longitude: captainLocation.longitude,
+          });
+        }
       }
 
       if (coords.length > 0) {
@@ -86,7 +117,7 @@ export const DummyMap: React.FC<DummyMapProps> = ({
         }, 300);
       }
     }
-  }, [captainLocation, pickupLocation, dropoffLocation]);
+  }, [captainLocation, pickupLocation, dropoffLocation, rideStatus]);
  
   // Animate to latitude/longitude when they change and no active ride/booking coordinates are present
   useEffect(() => {
@@ -112,6 +143,20 @@ export const DummyMap: React.FC<DummyMapProps> = ({
         customMapStyle={DARK_MAP_STYLE}
         initialRegion={initialRegion}
       >
+        {!pickupLocation?.coordinates && latitude && longitude && (
+          <Marker
+            coordinate={{ latitude, longitude }}
+            title="My Location"
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+          >
+            <View style={styles.userLocationMarker}>
+              <View style={styles.userLocationHalo} />
+              <View style={styles.userLocationDot} />
+            </View>
+          </Marker>
+        )}
+
         {pickupLocation?.coordinates && (
           <Marker
             coordinate={{
@@ -158,7 +203,41 @@ export const DummyMap: React.FC<DummyMapProps> = ({
           </Marker>
         )}
 
-        {pickupLocation?.coordinates && dropoffLocation?.coordinates && (
+        {rideStatus === 'arriving' && captainLocation?.latitude && pickupLocation?.coordinates && (
+          <Polyline
+            coordinates={[
+              {
+                latitude: captainLocation.latitude,
+                longitude: captainLocation.longitude,
+              },
+              {
+                latitude: pickupLocation.coordinates[1],
+                longitude: pickupLocation.coordinates[0],
+              },
+            ]}
+            strokeColor="#007AFF"
+            strokeWidth={4}
+          />
+        )}
+
+        {rideStatus === 'in_progress' && captainLocation?.latitude && dropoffLocation?.coordinates && (
+          <Polyline
+            coordinates={[
+              {
+                latitude: captainLocation.latitude,
+                longitude: captainLocation.longitude,
+              },
+              {
+                latitude: dropoffLocation.coordinates[1],
+                longitude: dropoffLocation.coordinates[0],
+              },
+            ]}
+            strokeColor="#FF5A1F"
+            strokeWidth={4}
+          />
+        )}
+
+        {!rideStatus && pickupLocation?.coordinates && dropoffLocation?.coordinates && (
           <Polyline
             coordinates={[
               {
@@ -212,5 +291,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 5,
+  },
+  userLocationMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 30,
+    height: 30,
+  },
+  userLocationHalo: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 122, 255, 0.25)',
+  },
+  userLocationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#007AFF',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 4,
   },
 });

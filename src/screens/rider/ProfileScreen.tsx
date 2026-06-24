@@ -8,30 +8,36 @@ import {
   StatusBar,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
 const MENU_ITEMS = [
   { section: 'Account', items: [
-    { icon: '👤', label: 'Edit Profile', arrow: true },
-    { icon: '📍', label: 'Saved Addresses', arrow: true },
-    { icon: '💳', label: 'Payment Methods', arrow: true },
-  ]},
-  { section: 'Preferences', items: [
-    { icon: '🔔', label: 'Notifications', arrow: true },
-    { icon: '🌙', label: 'Dark Mode', toggle: true },
-    { icon: '🌐', label: 'Language', value: 'English', arrow: true },
+    { icon: '👤', label: 'Edit Profile', route: 'EditProfile', arrow: true },
+    { icon: '📍', label: 'Saved Addresses', route: 'SavedAddresses', arrow: true },
   ]},
   { section: 'Support', items: [
-    { icon: '🆘', label: 'Safety', arrow: true },
-    { icon: '💬', label: 'Help & Support', arrow: true },
-    { icon: '⭐', label: 'Rate the App', arrow: true },
-    { icon: '📋', label: 'Terms & Privacy', arrow: true },
+    { icon: '🆘', label: 'Safety', route: 'Support', params: { activeTab: 'safety' }, arrow: true },
+    { icon: '💬', label: 'Help & Support', route: 'Support', params: { activeTab: 'help' }, arrow: true },
+    { icon: '⭐', label: 'Rate the App', route: 'Support', params: { activeTab: 'rate' }, arrow: true },
+    { icon: '📋', label: 'Terms & Privacy', route: 'Support', params: { activeTab: 'terms' }, arrow: true },
   ]},
 ];
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuthStore();
+  const navigation = useNavigation<any>();
+
+  const filteredMenuItems = MENU_ITEMS.map(section => {
+    if (section.section === 'Account' && user?.role === 'captain') {
+      return {
+        ...section,
+        items: section.items.filter(item => item.route !== 'SavedAddresses')
+      };
+    }
+    return section;
+  });
 
   return (
     <View style={styles.container}>
@@ -50,7 +56,7 @@ export const ProfileScreen: React.FC = () => {
                 style={styles.avatar}>
                 <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
               </LinearGradient>
-              <TouchableOpacity style={styles.editAvatarBtn}>
+              <TouchableOpacity style={styles.editAvatarBtn} onPress={() => navigation.navigate('EditProfile')}>
                 <Text style={styles.editAvatarIcon}>✏️</Text>
               </TouchableOpacity>
             </View>
@@ -75,7 +81,7 @@ export const ProfileScreen: React.FC = () => {
             {[
               { value: `${user?.rating}⭐`, label: 'Rating' },
               { value: `${user?.totalRides}`, label: 'Rides' },
-              { value: '2 yrs', label: 'Member Since' },
+              { value: user?.memberSince || 'June 2024', label: 'Member Since' },
             ].map((stat, i) => (
               <View key={i} style={styles.statItem}>
                 <Text style={styles.statValue}>{stat.value}</Text>
@@ -85,28 +91,19 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </LinearGradient>
 
-        {/* Referral Banner */}
-        <TouchableOpacity style={styles.referralBanner} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['rgba(255,215,0,0.15)', 'rgba(255,215,0,0.05)']}
-            style={styles.referralGrad}>
-            <Text style={styles.referralIcon}>🎁</Text>
-            <View style={styles.referralText}>
-              <Text style={styles.referralTitle}>Refer & Earn ₹100</Text>
-              <Text style={styles.referralSub}>Share GoNow with friends</Text>
-            </View>
-            <Text style={styles.referralArrow}>→</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
         {/* Menu */}
-        {MENU_ITEMS.map((section, si) => (
+        {filteredMenuItems.map((section, si) => (
           <View key={si} style={styles.menuSection}>
             <Text style={styles.menuSectionLabel}>{section.section}</Text>
             <View style={styles.menuCard}>
               {section.items.map((item, ii) => (
                 <TouchableOpacity
                   key={ii}
+                  onPress={() => {
+                    if (item.route) {
+                      navigation.navigate(item.route, (item as any).params);
+                    }
+                  }}
                   style={[
                     styles.menuItem,
                     ii < section.items.length - 1 && styles.menuItemBorder,

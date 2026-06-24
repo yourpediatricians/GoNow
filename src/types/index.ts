@@ -1,6 +1,12 @@
 // User Types
 export type UserRole = 'rider' | 'captain';
 
+export interface SavedAddress {
+  id: string;
+  label: string;
+  address: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -9,7 +15,14 @@ export interface User {
   avatar?: string;
   rating: number;
   totalRides: number;
+  email?: string;
+  gender?: string;
+  dob?: string;
+  memberSince?: string;
+  savedAddresses?: SavedAddress[];
+  vehicle?: Vehicle;
 }
+
 
 // Location Types
 export interface Coordinates {
@@ -87,6 +100,7 @@ export interface Vehicle {
   model: string;
   color: string;
   plateNumber: string;
+  year?: number;
 }
 
 // Payment Types
