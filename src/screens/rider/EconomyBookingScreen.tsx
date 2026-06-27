@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RiderStackParamList } from '../../types';
+import { RiderStackParamList, Location } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { poolService } from '../../services/pool.service';
+import { rideService } from '../../services/ride.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'EconomyBooking'>;
 
@@ -32,8 +33,36 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
     ? { name: 'Dilshad Garden Metro', address: 'Dilshad Garden Metro Station Gate 1, Delhi', latitude: 28.6759, longitude: 77.3216 }
     : { name: 'Maujpur, Delhi', address: 'Maujpur Main Road, Shahdara, Delhi', latitude: 28.6891, longitude: 77.2715 };
 
-  const [pickup, setPickup] = useState(defaultPickup);
-  const [dropoff, setDropoff] = useState(defaultDropoff);
+  const [pickup, setPickup] = useState<Location>(defaultPickup);
+  const [dropoff, setDropoff] = useState<Location>(defaultDropoff);
+
+  const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
+  const [estimatedDistance, setEstimatedDistance] = useState<number | null>(null);
+  const [isFareLoading, setIsFareLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchFareEstimate = async () => {
+      if (!pickup || !dropoff) return;
+      setIsFareLoading(true);
+      try {
+        const res = await rideService.getEstimate(
+          { latitude: pickup.latitude, longitude: pickup.longitude, address: pickup.address, name: pickup.name },
+          { latitude: dropoff.latitude, longitude: dropoff.longitude, address: dropoff.address, name: dropoff.name },
+          'economy'
+        );
+        if (res.success && res.data) {
+          setEstimatedFare(res.data.fare);
+          setEstimatedDistance(res.data.distance);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch economy fare estimate:', err);
+      } finally {
+        setIsFareLoading(false);
+      }
+    };
+
+    fetchFareEstimate();
+  }, [pickup?.latitude, pickup?.longitude, dropoff?.latitude, dropoff?.longitude]);
 
   // Capture selection from SelectLocationScreen
   useEffect(() => {
@@ -168,10 +197,14 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
           <Text style={s.cardLabel}>💰 Fare Summary</Text>
           <View style={s.fareRow}>
             <View>
-              <Text style={s.fareTitle}>Economy Flat Fare</Text>
-              <Text style={s.fareDesc}>Shared ride with 2-4 passengers</Text>
+              <Text style={s.fareTitle}>Economy Shared Fare</Text>
+              <Text style={s.fareDesc}>
+                {isFareLoading ? 'Calculating distance...' : `Shared ride · ${estimatedDistance ? estimatedDistance.toFixed(1) + ' km' : 'Connecting...'}`}
+              </Text>
             </View>
-            <Text style={s.fareValue}>₹15</Text>
+            <Text style={s.fareValue}>
+              {isFareLoading ? '...' : `₹${estimatedFare || 15}`}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -225,7 +258,7 @@ const s = StyleSheet.create({
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
-    ...Shadow.card,
+    ...Shadow.sm,
   },
   cardLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs },
   cardSubLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.md },

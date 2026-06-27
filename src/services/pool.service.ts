@@ -44,7 +44,7 @@ export const poolService = {
   },
 
   completePool: async (poolId: string) => {
-    const { data } = await api.post(`/pools/${poolId}/complete`);
+    const { data } = await api.post(`/pools/${poolId}/complete`, {}, { timeout: 120000 });
     return data;
   },
 

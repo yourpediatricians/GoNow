@@ -84,7 +84,7 @@ export const rideService = {
    * Captain: Mark ride as completed — triggers earnings + wallet update.
    */
   completeRide: async (rideId: string) => {
-    const { data } = await api.post(`/rides/${rideId}/complete`);
+    const { data } = await api.post(`/rides/${rideId}/complete`, {}, { timeout: 120000 });
     return data;
   },
 

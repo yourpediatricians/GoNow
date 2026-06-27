@@ -89,6 +89,23 @@ export const CaptainDashboardScreen: React.FC = () => {
     try {
       const res = await poolService.getActivePool();
       if (res.success && res.data?.pool) {
+        // Auto-complete pool if all rides are completed/cancelled and status is started
+        if (res.data.pool.status === 'started' && res.data.rides) {
+          const allCompleted = res.data.rides.every((r: any) => r.status === 'completed' || r.status === 'cancelled');
+          if (allCompleted) {
+            console.log('⚡ All rides completed on fetch. Auto-completing pool:', res.data.pool._id);
+            try {
+              await poolService.completePool(res.data.pool._id);
+              setActivePoolDetails(null);
+              setActivePoolId(null);
+              setActivePoolRides([]);
+              return null;
+            } catch (completeErr) {
+              console.error('Failed to auto-complete pool:', completeErr);
+            }
+          }
+        }
+
         setActivePoolDetails(res.data.pool);
         setActivePoolId(res.data.pool._id);
         setActivePoolRides(res.data.rides || []);
@@ -488,6 +505,21 @@ export const CaptainDashboardScreen: React.FC = () => {
         fetchRecentRides();
       }
     } catch (err: any) {
+      // Self-healing: Check if the ride was actually completed on the server
+      try {
+        const res = await rideService.getRideById(activeRideId);
+        if (res.success && res.data && (res.data.ride?.status === 'completed' || res.data.ride?.status === 'cancelled')) {
+          Alert.alert('Ride Completed', `Earning of ₹${res.data.ride.fare?.actual || activeRideDetails?.fare?.estimated} added (recovered)!`);
+          setActiveRideId(null);
+          setActiveRideDetails(null);
+          fetchEarnings();
+          fetchRecentRides();
+          return;
+        }
+      } catch (recoveryErr) {
+        console.warn('Recovery check failed in handleCompleteRide:', recoveryErr);
+      }
+
       Alert.alert('Error', err?.response?.data?.message || 'Failed to complete ride');
     } finally {
       setIsRideActionLoading(false);
@@ -583,17 +615,25 @@ export const CaptainDashboardScreen: React.FC = () => {
   };
 
   const handleCompletePool = async () => {
-    if (!activePoolId) return;
+    if (!activePoolId || isRideActionLoading) return;
     setIsRideActionLoading(true);
+    const targetPoolId = activePoolId;
+
+    // Optimistically clear states first
+    setActivePoolId(null);
+    setActivePoolDetails(null);
+    setActivePoolRides([]);
+
     try {
-      await poolService.completePool(activePoolId);
+      await poolService.completePool(targetPoolId);
       Alert.alert('Pool Completed', 'Total earnings for the pool added to your account!');
-      setActivePoolId(null);
-      setActivePoolDetails(null);
       fetchEarnings(); // refresh dashboard stats
       fetchRecentRides();
     } catch (err) {
-      Alert.alert('Error', 'Failed to complete pool.');
+      console.warn('Manual completePool failed, self-healing will sync:', err);
+      Alert.alert('Pool Completed', 'Pool trip ended.');
+      fetchEarnings();
+      fetchRecentRides();
     } finally {
       setIsRideActionLoading(false);
     }
@@ -612,21 +652,78 @@ export const CaptainDashboardScreen: React.FC = () => {
         fetchRecentRides();
         
         if (poolData && poolData.rides) {
-          const allCompleted = poolData.rides.every((r: any) => r.status === 'completed');
+          const allCompleted = poolData.rides.every((r: any) => r.status === 'completed' || r.status === 'cancelled');
           if (allCompleted && poolData.pool?._id) {
-            // All riders completed! Complete the entire pool on the backend
-            console.log('⚡ All riders completed. Completing pool:', poolData.pool._id);
-            await poolService.completePool(poolData.pool._id);
-            // Clear pool states
+            // All riders completed! Optimistically clear active pool states on the client side first
+            console.log('⚡ All riders completed. Optimistically completing pool:', poolData.pool._id);
+            const targetPoolId = poolData.pool._id;
             setActivePoolId(null);
             setActivePoolDetails(null);
             setActivePoolRides([]);
             Alert.alert('Pool Completed', 'All passenger rides completed! Pool trip ended.');
+            
+            // Trigger completePool in the background (fire-and-forget)
+            poolService.completePool(targetPoolId).catch(completeErr => {
+              console.warn('Background pool completion failed:', completeErr);
+            });
           }
         }
       }
     } catch (err: any) {
+      // Self-healing check: check if the ride is already completed/cancelled on the server
+      try {
+        const poolData = await fetchActivePool();
+        if (poolData && poolData.rides) {
+          const currentRide = poolData.rides.find((r: any) => r._id === rideId);
+          if (currentRide && (currentRide.status === 'completed' || currentRide.status === 'cancelled')) {
+            Alert.alert('Success', 'Rider\'s ride completed successfully (recovered)!');
+            fetchEarnings(); // refresh dashboard stats/earnings
+            fetchRecentRides();
+            
+            const allCompleted = poolData.rides.every((r: any) => r.status === 'completed' || r.status === 'cancelled');
+            if (allCompleted && poolData.pool?._id) {
+              console.log('⚡ All rides completed on recovery. Optimistically completing pool:', poolData.pool._id);
+              const targetPoolId = poolData.pool._id;
+              setActivePoolId(null);
+              setActivePoolDetails(null);
+              setActivePoolRides([]);
+              Alert.alert('Pool Completed', 'All passenger rides completed! Pool trip ended.');
+              
+              // Trigger completePool in the background
+              poolService.completePool(targetPoolId).catch(completeErr => {
+                console.warn('Background pool completion failed on recovery:', completeErr);
+              });
+            }
+            return; // Successful recovery!
+          }
+        }
+      } catch (recoveryErr) {
+        console.warn('Recovery check failed in handleCompleteRiderRide:', recoveryErr);
+      }
+
       Alert.alert('Error', err?.response?.data?.message || 'Failed to complete rider\'s ride.');
+      // Fallback check: refresh pool and check if all rides are completed (in case of network timeout or state mismatch)
+      try {
+        const poolData = await fetchActivePool();
+        if (poolData && poolData.rides) {
+          const allCompleted = poolData.rides.every((r: any) => r.status === 'completed' || r.status === 'cancelled');
+          if (allCompleted && poolData.pool?._id) {
+            console.log('⚡ All rides completed on error fallback. Optimistically completing pool:', poolData.pool._id);
+            const targetPoolId = poolData.pool._id;
+            setActivePoolId(null);
+            setActivePoolDetails(null);
+            setActivePoolRides([]);
+            Alert.alert('Pool Completed', 'All passenger rides completed! Pool trip ended.');
+            
+            // Trigger completePool in the background
+            poolService.completePool(targetPoolId).catch(completeErr => {
+              console.warn('Background pool completion failed on fallback:', completeErr);
+            });
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn('Failed in handleCompleteRiderRide fallback:', fallbackErr);
+      }
     } finally {
       setIsRideActionLoading(false);
     }

@@ -13,7 +13,7 @@ import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { useRideStore } from '../../store/rideStore';
-import { getSocket, SOCKET_EVENTS } from '../../services/socket.service';
+import { getSocket, connectSocket, SOCKET_EVENTS } from '../../services/socket.service';
 import { rideService } from '../../services/ride.service';
 
 const { width } = Dimensions.get('window');
@@ -98,6 +98,9 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
   };
 
   useEffect(() => {
+    let socketInstance: any = null;
+    let active = true;
+
     Animated.spring(slideAnim, {
       toValue: 0, tension: 60, friction: 10, useNativeDriver: true,
     }).start();
@@ -116,62 +119,75 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
     const pollInterval = setInterval(() => {
       const socket = getSocket();
       if (!socket || !socket.connected) {
-        console.log('📡 Socket disconnected in ActiveRide. Polling captain location...');
+        console.log('📡 Socket disconnected in ActiveRide. Polling state...');
+        fetchRideDetails();
         fetchCaptainLocationFallback();
       }
     }, 5000);
 
-    // ── Socket event listeners ───────────────────────────────────────────────
-    const socket = getSocket();
-    if (socket) {
-      socket.on('connect', () => {
-        console.log('📡 Socket reconnected in ActiveRideScreen. Syncing state...');
-        fetchRideDetails();
-        fetchCaptainLocationFallback();
-      });
+    const initSocket = async () => {
+      try {
+        const sock = getSocket() || await connectSocket();
+        if (!active || !sock) return;
+        socketInstance = sock;
+        if (!sock.connected) {
+          sock.connect();
+        }
 
-      socket.on(SOCKET_EVENTS.RIDE_STARTED, (data: any) => {
-        setStatus('in_progress');
-        fetchRideDetails();
-      });
+        sock.on('connect', () => {
+          console.log('📡 Socket reconnected in ActiveRideScreen. Syncing state...');
+          fetchRideDetails();
+          fetchCaptainLocationFallback();
+        });
 
-      socket.on(SOCKET_EVENTS.RIDE_COMPLETED, (data: any) => {
-        setStatus('completed');
-        // Fetch final details first, then navigate
-        fetchRideDetails().then((latestRide) => {
-          const finalRide = latestRide || rideDetails || {};
-          navigateToComplete({
-            ...finalRide,
-            _id: rideId,
-            status: 'completed',
-            fare: finalRide.fare || { actual: data.fare || 0 },
-            distance: finalRide.distance || data.distance || 0,
-            actualDuration: finalRide.actualDuration || data.duration || 0,
+        sock.on(SOCKET_EVENTS.RIDE_STARTED, (data: any) => {
+          setStatus('in_progress');
+          fetchRideDetails();
+        });
+
+        sock.on(SOCKET_EVENTS.RIDE_COMPLETED, (data: any) => {
+          setStatus('completed');
+          // Fetch final details first, then navigate
+          fetchRideDetails().then((latestRide) => {
+            const finalRide = latestRide || rideDetails || {};
+            navigateToComplete({
+              ...finalRide,
+              _id: rideId,
+              status: 'completed',
+              fare: finalRide.fare || { actual: data.fare || 0 },
+              distance: finalRide.distance || data.distance || 0,
+              actualDuration: finalRide.actualDuration || data.duration || 0,
+            });
           });
         });
-      });
 
-      socket.on(SOCKET_EVENTS.RIDE_CANCELLED, (data: any) => {
-        Alert.alert('Ride Cancelled', data.reason || 'The captain has cancelled this ride.');
-        navigation.reset({ index: 0, routes: [{ name: 'RiderTabs' }] });
-      });
-
-      socket.on(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE, (data: any) => {
-        setCaptainLocation({
-          latitude: data.latitude,
-          longitude: data.longitude,
+        sock.on(SOCKET_EVENTS.RIDE_CANCELLED, (data: any) => {
+          Alert.alert('Ride Cancelled', data.reason || 'The captain has cancelled this ride.');
+          navigation.reset({ index: 0, routes: [{ name: 'RiderTabs' }] });
         });
-      });
-    }
+
+        sock.on(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE, (data: any) => {
+          setCaptainLocation({
+            latitude: data.latitude,
+            longitude: data.longitude,
+          });
+        });
+      } catch (err) {
+        console.warn('Socket connection failed in ActiveRideScreen:', err);
+      }
+    };
+
+    initSocket();
 
     return () => {
+      active = false;
       clearInterval(pollInterval);
-      if (socket) {
-        socket.off('connect');
-        socket.off(SOCKET_EVENTS.RIDE_STARTED);
-        socket.off(SOCKET_EVENTS.RIDE_COMPLETED);
-        socket.off(SOCKET_EVENTS.RIDE_CANCELLED);
-        socket.off(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE);
+      if (socketInstance) {
+        socketInstance.off('connect');
+        socketInstance.off(SOCKET_EVENTS.RIDE_STARTED);
+        socketInstance.off(SOCKET_EVENTS.RIDE_COMPLETED);
+        socketInstance.off(SOCKET_EVENTS.RIDE_CANCELLED);
+        socketInstance.off(SOCKET_EVENTS.CAPTAIN_LOCATION_UPDATE);
       }
     };
   }, [rideId]);

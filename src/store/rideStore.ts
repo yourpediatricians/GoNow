@@ -126,25 +126,13 @@ export const useRideStore = create<RideState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const types: RideType[] = ['bike', 'economy'];
-      const promises = types.map(type => {
-        if (type === 'economy') {
-          // Intercept economy and return a mock flat rate estimate on the frontend to prevent backend validation failure
-          return Promise.resolve({
-            data: {
-              fare: 15,
-              duration: 3,
-              distance: 1.5,
-              availableCaptains: 4,
-              isSurge: false,
-            }
-          });
-        }
-        return rideService.getEstimate(
+      const promises = types.map(type => 
+        rideService.getEstimate(
           { latitude: pickup.latitude, longitude: pickup.longitude, address: pickup.address, name: pickup.name },
           { latitude: dropoff.latitude, longitude: dropoff.longitude, address: dropoff.address, name: dropoff.name },
           type
-        );
-      });
+        )
+      );
 
       const results = await Promise.all(promises);
 

@@ -10,8 +10,8 @@
  */
 
 // ── Dev (local backend) ────────────────────────────────────────────────────────
-// const DEV_BASE_URL = 'http://10.150.226.38:5000/api';
-// const DEV_SOCKET_URL = 'http://10.150.226.38:5000';
+// const DEV_BASE_URL = 'http://10.17.2.38:5000/api';
+// const DEV_SOCKET_URL = 'http://10.17.2.38:5000';
 const DEV_BASE_URL = 'https://gonow-backend.onrender.com/api';
 const DEV_SOCKET_URL = 'https://gonow-backend.onrender.com';
 
@@ -34,7 +34,7 @@ export const BASE_URL = IS_DEV ? DEV_BASE_URL : PROD_BASE_URL;
 export const SOCKET_URL = IS_DEV ? DEV_SOCKET_URL : PROD_SOCKET_URL;
 
 // API timeout in milliseconds
-export const API_TIMEOUT = 15000;
+export const API_TIMEOUT = 60000;
 
 // Google Maps API Key placeholder (replace with your actual key for autocomplete)
 export const GOOGLE_MAPS_API_KEY = 'AIzaSyBPdowXJwFfcybbHYp8O30_xFh26OHVlbc';

@@ -113,12 +113,18 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
       navigation.navigate('EconomyBooking', { direction: 'to_metro' });
       return;
     }
-    if (availableCaptains === 0) {
-      Alert.alert('No Captains', 'No captains available in your area. Try again in a moment.');
-      return;
-    }
     setIsBooking(true);
     try {
+      // Refetch the estimate immediately to get the freshest captain availability
+      await fetchEstimate();
+      
+      const freshCaptains = useRideStore.getState().availableCaptainsMap[selectedRide] || 0;
+      if (freshCaptains === 0) {
+        Alert.alert('No Captains', 'No captains available in your area. Try again in a moment.');
+        setIsBooking(false);
+        return;
+      }
+
       setPaymentMethod(selectedPayment);
       const rideId = await requestRide();
       if (rideId) {

@@ -188,9 +188,9 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
       );
     };
 
-    // Fallback Polling: check every 4 seconds while waiting
+    // Fallback Polling: check every 4 seconds while waiting or matched
     const pollInterval = setInterval(() => {
-      if (statusRef.current === 'waiting') {
+      if (statusRef.current === 'waiting' || statusRef.current === 'matched') {
         fetchDetails();
       }
     }, 4000);
