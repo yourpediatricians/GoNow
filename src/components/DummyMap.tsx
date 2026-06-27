@@ -34,6 +34,41 @@ const DARK_MAP_STYLE = [
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
 ];
 
+const decodePolyline = (encoded: string) => {
+  const points = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+
+  while (index < len) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    points.push({
+      latitude: (lat / 1e5),
+      longitude: (lng / 1e5),
+    });
+  }
+  return points;
+};
+
+import { GOOGLE_MAPS_API_KEY } from '../config/api.config';
+
 export const DummyMap: React.FC<DummyMapProps> = ({
   style,
   children,
@@ -48,6 +83,71 @@ export const DummyMap: React.FC<DummyMapProps> = ({
   rideStatus,
 }) => {
   const mapRef = useRef<MapView>(null);
+  const [routeCoordinates, setRouteCoordinates] = React.useState<{ latitude: number; longitude: number }[]>([]);
+
+  useEffect(() => {
+    const fetchRoute = async () => {
+      let origin = '';
+      let destination = '';
+
+      if (rideStatus === 'arriving' && captainLocation?.latitude && pickupLocation?.coordinates) {
+        origin = `${captainLocation.latitude},${captainLocation.longitude}`;
+        destination = `${pickupLocation.coordinates[1]},${pickupLocation.coordinates[0]}`;
+      } else if (rideStatus === 'in_progress' && captainLocation?.latitude && dropoffLocation?.coordinates) {
+        origin = `${captainLocation.latitude},${captainLocation.longitude}`;
+        destination = `${dropoffLocation.coordinates[1]},${dropoffLocation.coordinates[0]}`;
+      } else if (!rideStatus && pickupLocation?.coordinates && dropoffLocation?.coordinates) {
+        origin = `${pickupLocation.coordinates[1]},${pickupLocation.coordinates[0]}`;
+        destination = `${dropoffLocation.coordinates[1]},${dropoffLocation.coordinates[0]}`;
+      }
+
+      if (!origin || !destination) {
+        setRouteCoordinates([]);
+        return;
+      }
+
+      if (!GOOGLE_MAPS_API_KEY) {
+        const coords = [
+          {
+            latitude: parseFloat(origin.split(',')[0]),
+            longitude: parseFloat(origin.split(',')[1]),
+          },
+          {
+            latitude: parseFloat(destination.split(',')[0]),
+            longitude: parseFloat(destination.split(',')[1]),
+          },
+        ];
+        setRouteCoordinates(coords);
+        return;
+      }
+
+      try {
+        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${GOOGLE_MAPS_API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === 'OK' && data.routes?.[0]?.overview_polyline?.points) {
+          const points = decodePolyline(data.routes[0].overview_polyline.points);
+          setRouteCoordinates(points);
+        } else {
+          const coords = [
+            {
+              latitude: parseFloat(origin.split(',')[0]),
+              longitude: parseFloat(origin.split(',')[1]),
+            },
+            {
+              latitude: parseFloat(destination.split(',')[0]),
+              longitude: parseFloat(destination.split(',')[1]),
+            },
+          ];
+          setRouteCoordinates(coords);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch route directions:', err);
+      }
+    };
+
+    fetchRoute();
+  }, [captainLocation?.latitude, captainLocation?.longitude, pickupLocation?.coordinates, dropoffLocation?.coordinates, rideStatus]);
 
   const initialRegion = {
     latitude: captainLocation?.latitude || latitude,
@@ -143,7 +243,7 @@ export const DummyMap: React.FC<DummyMapProps> = ({
         customMapStyle={DARK_MAP_STYLE}
         initialRegion={initialRegion}
       >
-        {!pickupLocation?.coordinates && latitude && longitude && (
+        {!pickupLocation?.coordinates && latitude && longitude && !isNaN(latitude) && !isNaN(longitude) && (
           <Marker
             coordinate={{ latitude, longitude }}
             title="My Location"
@@ -157,7 +257,11 @@ export const DummyMap: React.FC<DummyMapProps> = ({
           </Marker>
         )}
 
-        {pickupLocation?.coordinates && (
+        {pickupLocation?.coordinates &&
+         typeof pickupLocation.coordinates[1] === 'number' &&
+         typeof pickupLocation.coordinates[0] === 'number' &&
+         !isNaN(pickupLocation.coordinates[1]) &&
+         !isNaN(pickupLocation.coordinates[0]) && (
           <Marker
             coordinate={{
               latitude: pickupLocation.coordinates[1],
@@ -172,7 +276,11 @@ export const DummyMap: React.FC<DummyMapProps> = ({
           </Marker>
         )}
 
-        {dropoffLocation?.coordinates && (
+        {dropoffLocation?.coordinates &&
+         typeof dropoffLocation.coordinates[1] === 'number' &&
+         typeof dropoffLocation.coordinates[0] === 'number' &&
+         !isNaN(dropoffLocation.coordinates[1]) &&
+         !isNaN(dropoffLocation.coordinates[0]) && (
           <Marker
             coordinate={{
               latitude: dropoffLocation.coordinates[1],
@@ -187,7 +295,10 @@ export const DummyMap: React.FC<DummyMapProps> = ({
           </Marker>
         )}
 
-        {captainLocation?.latitude && (
+        {captainLocation?.latitude &&
+         captainLocation?.longitude &&
+         !isNaN(captainLocation.latitude) &&
+         !isNaN(captainLocation.longitude) && (
           <Marker
             coordinate={{
               latitude: captainLocation.latitude,
@@ -203,55 +314,12 @@ export const DummyMap: React.FC<DummyMapProps> = ({
           </Marker>
         )}
 
-        {rideStatus === 'arriving' && captainLocation?.latitude && pickupLocation?.coordinates && (
+        {routeCoordinates.length > 0 && (
           <Polyline
-            coordinates={[
-              {
-                latitude: captainLocation.latitude,
-                longitude: captainLocation.longitude,
-              },
-              {
-                latitude: pickupLocation.coordinates[1],
-                longitude: pickupLocation.coordinates[0],
-              },
-            ]}
-            strokeColor="#007AFF"
-            strokeWidth={4}
-          />
-        )}
-
-        {rideStatus === 'in_progress' && captainLocation?.latitude && dropoffLocation?.coordinates && (
-          <Polyline
-            coordinates={[
-              {
-                latitude: captainLocation.latitude,
-                longitude: captainLocation.longitude,
-              },
-              {
-                latitude: dropoffLocation.coordinates[1],
-                longitude: dropoffLocation.coordinates[0],
-              },
-            ]}
-            strokeColor="#FF5A1F"
-            strokeWidth={4}
-          />
-        )}
-
-        {!rideStatus && pickupLocation?.coordinates && dropoffLocation?.coordinates && (
-          <Polyline
-            coordinates={[
-              {
-                latitude: pickupLocation.coordinates[1],
-                longitude: pickupLocation.coordinates[0],
-              },
-              {
-                latitude: dropoffLocation.coordinates[1],
-                longitude: dropoffLocation.coordinates[0],
-              },
-            ]}
-            strokeColor="#FF5A1F"
-            strokeWidth={3}
-            lineDashPattern={[5, 5]}
+            coordinates={routeCoordinates}
+            strokeColor={rideStatus === 'arriving' ? '#007AFF' : '#FF5A1F'}
+            strokeWidth={5}
+            lineDashPattern={!rideStatus ? [5, 5] : undefined}
           />
         )}
       </MapView>

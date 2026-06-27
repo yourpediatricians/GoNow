@@ -24,6 +24,7 @@ import { IncomingRideScreen } from './IncomingRideScreen';
 import { rideService } from '../../services/ride.service';
 import { poolService } from '../../services/pool.service';
 import { captainService } from '../../services/captain.service';
+import { DummyMap } from '../../components/DummyMap';
 
 const { width } = Dimensions.get('window');
 
@@ -49,6 +50,7 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [verifyingRideId, setVerifyingRideId] = useState<string | null>(null);
   const [poolOtpCode, setPoolOtpCode] = useState<string>('');
   const [recentRides, setRecentRides] = useState<any[]>([]);
+  const [captainLocation, setCaptainLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const formatIncomingPoolRequest = async (payload: any) => {
     if (!payload || !payload.poolId) return payload;
@@ -320,10 +322,11 @@ export const CaptainDashboardScreen: React.FC = () => {
   useEffect(() => {
     if (!isOnline) return;
 
-    const interval = setInterval(() => {
+    const updateLoc = () => {
       Geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
+          setCaptainLocation({ latitude, longitude });
           // Update database location
           useCaptainStore.getState().updateLocationApi(latitude, longitude);
 
@@ -354,7 +357,10 @@ export const CaptainDashboardScreen: React.FC = () => {
         (error) => console.log('Location update error:', error),
         { enableHighAccuracy: true, timeout: 10000 }
       );
-    }, 10000); // every 10 seconds
+    };
+
+    updateLoc(); // Run immediately
+    const interval = setInterval(updateLoc, 10000); // every 10 seconds
 
     return () => clearInterval(interval);
   }, [isOnline, activeRideId, activeRideDetails, activePoolId, activePoolDetails]);
@@ -851,9 +857,30 @@ export const CaptainDashboardScreen: React.FC = () => {
     const isMatched = status === 'matched';
     const isStarted = status === 'started';
 
+    const maujpurCoords: [number, number] = [77.2715, 28.6891];
+    const metroCoords: [number, number] = [77.3216, 28.6759];
+
+    const poolPickup = {
+      coordinates: activePoolDetails.direction === 'to_home' ? metroCoords : maujpurCoords,
+      address: activePoolDetails.direction === 'to_home' ? 'Dilshad Garden Metro' : 'Maujpur, Delhi',
+    };
+
+    const poolDropoff = {
+      coordinates: activePoolDetails.direction === 'to_home' ? maujpurCoords : metroCoords,
+      address: activePoolDetails.direction === 'to_home' ? 'Maujpur, Delhi' : 'Dilshad Garden Metro',
+    };
+
     return (
       <View style={styles.activeOverlay}>
-        <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.85)" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <DummyMap
+          style={StyleSheet.absoluteFillObject}
+          captainLocation={captainLocation}
+          pickupLocation={poolPickup}
+          dropoffLocation={poolDropoff}
+          rideType="economy"
+          rideStatus={isMatched ? 'arriving' : 'in_progress'}
+        />
         <View style={styles.activeSheet}>
           <LinearGradient colors={['#1A0800', '#0D0D0D']} style={styles.activeSheetHeader}>
             <Text style={styles.activeSheetTitle}>
@@ -1048,7 +1075,15 @@ export const CaptainDashboardScreen: React.FC = () => {
 
     return (
       <View style={styles.activeOverlay}>
-        <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.85)" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <DummyMap
+          style={StyleSheet.absoluteFillObject}
+          captainLocation={captainLocation}
+          pickupLocation={activeRideDetails.pickup}
+          dropoffLocation={activeRideDetails.dropoff}
+          rideType={activeRideDetails.rideType}
+          rideStatus={isArriving ? 'arriving' : 'in_progress'}
+        />
         <View style={styles.activeSheet}>
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.activeSheetHeader}>
             <Text style={styles.activeSheetTitle}>
@@ -1450,7 +1485,7 @@ const styles = StyleSheet.create({
   actionSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
 
   // Active Ride styles
-  activeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end', zIndex: 1000 },
+  activeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', justifyContent: 'flex-end', zIndex: 1000 },
   activeSheet: { backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, overflow: 'hidden' },
   activeSheetHeader: { padding: Spacing.xl, alignItems: 'center' },
   activeSheetTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.white, marginBottom: 4 },

@@ -119,6 +119,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         role: user.role,
         rating: user.rating || 0.0,
         totalRides: user.totalRides || 0,
+        savedAddresses: user.savedAddresses || [],
       };
 
       set({ user: appUser, token: accessToken });
@@ -165,6 +166,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           role: user.role,
           rating: user.rating || 5.0,
           totalRides: user.totalRides || 0,
+          savedAddresses: user.savedAddresses || [],
         };
 
         set({ user: appUser, token: accessToken });

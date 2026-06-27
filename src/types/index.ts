@@ -5,6 +5,8 @@ export interface SavedAddress {
   id: string;
   label: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface User {
@@ -163,6 +165,9 @@ export type RiderStackParamList = {
     type?: 'pickup' | 'dropoff';
   };
   EconomyMatching: { poolId: string };
+  SavedAddresses: undefined;
+  EditProfile: undefined;
+  Support: undefined;
 };
 
 export type CaptainTabParamList = {

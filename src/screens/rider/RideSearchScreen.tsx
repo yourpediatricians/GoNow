@@ -274,7 +274,7 @@ const s = StyleSheet.create({
   matchCard: {
     width: width - 40, backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl, padding: Spacing.xl,
-    borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.card,
+    borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.md,
   },
   captainRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },

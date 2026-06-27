@@ -19,5 +19,25 @@ export const geocodingService = {
       console.warn('Error in reverseGeocode service:', err);
     }
     return 'Current Location (GPS)';
+  },
+
+  /**
+   * Forward-geocode an address string into latitude and longitude coordinates.
+   */
+  geocode: async (address: string): Promise<{ latitude: number; longitude: number } | null> => {
+    if (!GOOGLE_MAPS_API_KEY) {
+      return null;
+    }
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await axios.get(url);
+      if (response.data?.status === 'OK' && response.data.results?.[0]?.geometry?.location) {
+        const loc = response.data.results[0].geometry.location;
+        return { latitude: loc.lat, longitude: loc.lng };
+      }
+    } catch (err) {
+      console.warn('Error in geocode service:', err);
+    }
+    return null;
   }
 };

@@ -141,6 +141,7 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
         phone: data.captain.phone,
         rating: data.captain.rating,
         vehicle: data.captain.vehicle,
+        totalRides: data.captain.totalRides || 0,
       };
       setMatchedCaptain(cap);
       setPickupPointName(data.pickupPoint);
@@ -449,7 +450,7 @@ const s = StyleSheet.create({
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
-    ...Shadow.card,
+    ...Shadow.md,
   },
   matchSuccessLabel: {
     fontSize: 10,

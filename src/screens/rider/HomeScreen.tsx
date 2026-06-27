@@ -72,6 +72,38 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { pickup, setPickup, setDropoff } = useRideStore();
   const mapRef = useRef<any>(null);
 
+  const savedHome = user?.savedAddresses?.find((addr: any) => 
+    addr.label.toLowerCase() === 'home' && 
+    typeof addr.latitude === 'number' && typeof addr.longitude === 'number' &&
+    !isNaN(addr.latitude) && !isNaN(addr.longitude)
+  );
+  const savedWork = user?.savedAddresses?.find((addr: any) => 
+    (addr.label.toLowerCase() === 'work' || addr.label.toLowerCase() === 'office') &&
+    typeof addr.latitude === 'number' && typeof addr.longitude === 'number' &&
+    !isNaN(addr.latitude) && !isNaN(addr.longitude)
+  );
+
+  const quickDestinations = [
+    {
+      id: 'home',
+      icon: '🏠',
+      label: 'Home',
+      address: savedHome?.address || '',
+      latitude: savedHome?.latitude,
+      longitude: savedHome?.longitude,
+      isSet: !!savedHome,
+    },
+    {
+      id: 'work',
+      icon: '💼',
+      label: 'Work',
+      address: savedWork?.address || '',
+      latitude: savedWork?.latitude,
+      longitude: savedWork?.longitude,
+      isSet: !!savedWork,
+    },
+  ];
+
   // Request location permission & get current location on mount
   useEffect(() => {
     const requestLocation = async () => {
@@ -136,6 +168,21 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   };
 
   const handleQuickDest = (dest: any) => {
+    if (!dest.isSet) {
+      Alert.alert(
+        `Set ${dest.label} Address`,
+        `You haven't saved your ${dest.label} address yet. Would you like to save it now?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Set Address', 
+            onPress: () => navigation.navigate('SavedAddresses') 
+          }
+        ]
+      );
+      return;
+    }
+
     const { pickup } = useRideStore.getState();
     const activePickup = pickup || {
       latitude: 28.6719,
@@ -215,10 +262,13 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.quickRow}>
-          {QUICK_DESTINATIONS.map(dest => (
-            <TouchableOpacity key={dest.id} style={styles.quickChip} onPress={() => handleQuickDest(dest)}>
+          {quickDestinations.map(dest => (
+            <TouchableOpacity
+              key={dest.id}
+              style={[styles.quickChip, !dest.isSet && styles.quickChipUnset]}
+              onPress={() => handleQuickDest(dest)}>
               <Text style={styles.quickIcon}>{dest.icon}</Text>
-              <Text style={styles.quickLabel}>{dest.label}</Text>
+              <Text style={[styles.quickLabel, !dest.isSet && styles.quickLabelUnset]}>{dest.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -358,6 +408,14 @@ const styles = StyleSheet.create({
   },
   quickIcon: { fontSize: 18 },
   quickLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+  quickChipUnset: {
+    borderStyle: 'dashed',
+    borderColor: Colors.textMuted,
+    backgroundColor: 'transparent',
+  },
+  quickLabelUnset: {
+    color: Colors.textMuted,
+  },
   
   servicesSection: { marginBottom: Spacing.md },
   sectionLabel: {

@@ -18,11 +18,8 @@ import { useAuthStore } from '../../store/authStore';
 import { STORAGE_KEYS } from '../../services/api';
 import { SavedAddress } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
-
-const DEFAULT_ADDRESSES: SavedAddress[] = [
-  { id: '1', label: 'Home', address: 'Koramangala, Bengaluru, Karnataka, India' },
-  { id: '2', label: 'Office', address: 'Whitefield, Bengaluru, Karnataka, India' },
-];
+import { userService } from '../../services/user.service';
+import { geocodingService } from '../../services/geocoding.service';
 
 export const SavedAddressesScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -40,7 +37,7 @@ export const SavedAddressesScreen: React.FC = () => {
     if (user?.savedAddresses && user.savedAddresses.length > 0) {
       setAddresses(user.savedAddresses);
     } else {
-      setAddresses(DEFAULT_ADDRESSES);
+      setAddresses([]);
     }
   }, [user]);
 
@@ -57,6 +54,9 @@ export const SavedAddressesScreen: React.FC = () => {
         JSON.stringify({ ...existingUser, savedAddresses: updatedList })
       );
       setAddresses(updatedList);
+
+      // 3. Persist to MongoDB database via Backend API
+      await userService.updateProfile({ savedAddresses: updatedList });
     } catch (err) {
       console.error('Failed to persist saved addresses:', err);
     }
@@ -74,7 +74,8 @@ export const SavedAddressesScreen: React.FC = () => {
 
   const handleOpenAddModal = () => {
     setEditingAddress(null);
-    setLabel('');
+    const hasHome = addresses.some((item) => item.label.toLowerCase() === 'home');
+    setLabel(hasHome ? 'Work' : 'Home');
     setAddressVal('');
     setModalVisible(true);
   };
@@ -91,8 +92,36 @@ export const SavedAddressesScreen: React.FC = () => {
     const trimmedAddress = addressVal.trim();
 
     if (!trimmedLabel || !trimmedAddress) {
-      Alert.alert('Required Fields', 'Please fill out both Label and Address fields.');
+      Alert.alert('Required Fields', 'Please select a label and enter an address.');
       return;
+    }
+
+    // Check if label already exists (only when creating a new address or changing label)
+    const isDuplicate = addresses.some(
+      (item) =>
+        item.label.toLowerCase() === trimmedLabel.toLowerCase() &&
+        (!editingAddress || item.id !== editingAddress.id)
+    );
+
+    if (isDuplicate) {
+      Alert.alert(
+        'Duplicate Address',
+        `A saved address with label "${trimmedLabel}" already exists. Please edit or delete the existing one.`
+      );
+      return;
+    }
+
+    // Geocode to resolve coordinates
+    let lat = 28.6719; // Default (Welcome Metro Delhi)
+    let lng = 77.2781;
+    try {
+      const coords = await geocodingService.geocode(trimmedAddress);
+      if (coords) {
+        lat = coords.latitude;
+        lng = coords.longitude;
+      }
+    } catch (err) {
+      console.warn('Geocoding failed for address:', err);
     }
 
     let updatedList: SavedAddress[] = [];
@@ -101,7 +130,7 @@ export const SavedAddressesScreen: React.FC = () => {
       // Edit existing
       updatedList = addresses.map((item) =>
         item.id === editingAddress.id
-          ? { ...item, label: trimmedLabel, address: trimmedAddress }
+          ? { ...item, label: trimmedLabel, address: trimmedAddress, latitude: lat, longitude: lng }
           : item
       );
     } else {
@@ -110,6 +139,8 @@ export const SavedAddressesScreen: React.FC = () => {
         id: Date.now().toString(),
         label: trimmedLabel,
         address: trimmedAddress,
+        latitude: lat,
+        longitude: lng,
       };
       updatedList = [...addresses, newAddr];
     }
@@ -192,17 +223,19 @@ export const SavedAddressesScreen: React.FC = () => {
       </ScrollView>
 
       {/* Add New Address Button */}
-      <View style={s.footer}>
-        <TouchableOpacity style={s.addBtn} onPress={handleOpenAddModal} activeOpacity={0.85}>
-          <LinearGradient
-            colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={s.addBtnGrad}>
-            <Text style={s.addBtnText}>+ Add New Address</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      {addresses.length < 2 && (
+        <View style={s.footer}>
+          <TouchableOpacity style={s.addBtn} onPress={handleOpenAddModal} activeOpacity={0.85}>
+            <LinearGradient
+              colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.addBtnGrad}>
+              <Text style={s.addBtnText}>+ Add New Address</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -216,27 +249,24 @@ export const SavedAddressesScreen: React.FC = () => {
               {editingAddress ? 'Edit Address' : 'Add New Address'}
             </Text>
 
-            {/* Label Field */}
+            {/* Label Selector */}
             <View style={s.inputGroup}>
-              <Text style={s.labelTitle}>Label / Name</Text>
-              <TextInput
-                style={s.input}
-                placeholder="e.g. Home, Office, Gym..."
-                placeholderTextColor={Colors.textMuted}
-                value={label}
-                onChangeText={setLabel}
-                autoCapitalize="words"
-              />
-              {/* Quick labels suggestion */}
-              <View style={s.quickLabelsRow}>
-                {['Home', 'Office', 'Work', 'Gym'].map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={s.quickLabelPill}
-                    onPress={() => setLabel(item)}>
-                    <Text style={s.quickLabelPillText}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
+              <Text style={s.labelTitle}>Select Label</Text>
+              <View style={s.labelSelectorRow}>
+                {['Home', 'Work'].map((item) => {
+                  const isSelected = label.toLowerCase() === item.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={item}
+                      style={[s.labelSelectorPill, isSelected && s.labelSelectorPillActive]}
+                      onPress={() => setLabel(item)}
+                      activeOpacity={0.7}>
+                      <Text style={[s.labelSelectorText, isSelected && s.labelSelectorTextActive]}>
+                        {item === 'Home' ? '🏠 Home' : '💼 Work'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -476,18 +506,32 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     marginTop: Spacing.xs,
   },
-  quickLabelPill: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  labelSelectorRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
   },
-  quickLabelPillText: {
-    fontSize: FontSize.xs,
+  labelSelectorPill: {
+    flex: 1,
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelSelectorPillActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(255, 90, 31, 0.08)',
+  },
+  labelSelectorText: {
+    fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
+    fontWeight: FontWeight.bold,
+  },
+  labelSelectorTextActive: {
+    color: Colors.primary,
   },
   modalActions: {
     flexDirection: 'row',

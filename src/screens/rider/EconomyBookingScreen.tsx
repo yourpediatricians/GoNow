@@ -15,6 +15,7 @@ import { RiderStackParamList, Location } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { poolService } from '../../services/pool.service';
 import { rideService } from '../../services/ride.service';
+import { useAuthStore } from '../../store/authStore';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'EconomyBooking'>;
 
@@ -23,6 +24,66 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [loading, setLoading] = useState(false);
+
+  const { user } = useAuthStore();
+
+  const savedHome = user?.savedAddresses?.find((addr: any) => 
+    addr.label.toLowerCase() === 'home' && 
+    typeof addr.latitude === 'number' && typeof addr.longitude === 'number' &&
+    !isNaN(addr.latitude) && !isNaN(addr.longitude)
+  );
+  const savedWork = user?.savedAddresses?.find((addr: any) => 
+    (addr.label.toLowerCase() === 'work' || addr.label.toLowerCase() === 'office') &&
+    typeof addr.latitude === 'number' && typeof addr.longitude === 'number' &&
+    !isNaN(addr.latitude) && !isNaN(addr.longitude)
+  );
+
+  const quickDestinations = [
+    {
+      id: 'home',
+      icon: '🏠',
+      label: 'Home',
+      address: savedHome?.address || '',
+      latitude: savedHome?.latitude,
+      longitude: savedHome?.longitude,
+      isSet: !!savedHome,
+    },
+    {
+      id: 'work',
+      icon: '💼',
+      label: 'Work',
+      address: savedWork?.address || '',
+      latitude: savedWork?.latitude,
+      longitude: savedWork?.longitude,
+      isSet: !!savedWork,
+    },
+  ];
+
+  const handleQuickDest = (dest: any) => {
+    if (!dest.isSet) {
+      Alert.alert(
+        `Set ${dest.label} Address`,
+        `You haven't saved your ${dest.label} address yet. Would you like to save it now?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Set Address', 
+            onPress: () => navigation.navigate('SavedAddresses') 
+          }
+        ]
+      );
+      return;
+    }
+
+    const dropoffLoc = {
+      latitude: dest.latitude,
+      longitude: dest.longitude,
+      address: dest.address,
+      name: dest.label,
+    };
+    setDropoff(dropoffLoc);
+    Alert.alert('Success', `${dest.label} address set as drop-off!`);
+  };
 
   // Pre-fill locations as per wireframes (Maujpur & Dilshad Garden Metro)
   const defaultPickup = direction === 'to_metro'
@@ -190,7 +251,27 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
           </View>
         </View>
 
-
+        {/* Saved Addresses Card */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>⭐ Saved Addresses</Text>
+          <View style={s.quickDestRow}>
+            {quickDestinations.map(dest => (
+              <TouchableOpacity
+                key={dest.id}
+                style={[s.quickChip, !dest.isSet && s.quickChipUnset]}
+                onPress={() => handleQuickDest(dest)}
+                activeOpacity={0.8}>
+                <Text style={s.quickIcon}>{dest.icon}</Text>
+                <View style={s.quickTextContainer}>
+                  <Text style={[s.quickLabel, !dest.isSet && s.quickLabelUnset]}>{dest.label}</Text>
+                  <Text style={[s.quickAddressText, !dest.isSet && s.quickLabelUnset]} numberOfLines={1}>
+                    {dest.isSet ? dest.address : 'Tap to set'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Fare Summary Card */}
         <View style={s.card}>
@@ -303,4 +384,44 @@ const s = StyleSheet.create({
   bookingBtn: { borderRadius: BorderRadius.md, overflow: 'hidden' },
   bookingBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center' },
   bookingBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
+  quickDestRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  quickChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  quickChipUnset: {
+    borderStyle: 'dashed',
+    borderColor: Colors.textMuted,
+    backgroundColor: 'transparent',
+  },
+  quickIcon: {
+    fontSize: 22,
+  },
+  quickTextContainer: {
+    flex: 1,
+  },
+  quickLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  quickLabelUnset: {
+    color: Colors.textMuted,
+  },
+  quickAddressText: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
 });
