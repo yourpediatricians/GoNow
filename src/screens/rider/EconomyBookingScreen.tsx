@@ -16,6 +16,7 @@ import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../
 import { poolService } from '../../services/pool.service';
 import { rideService } from '../../services/ride.service';
 import { useAuthStore } from '../../store/authStore';
+import { useRideStore } from '../../store/rideStore';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'EconomyBooking'>;
 
@@ -173,6 +174,16 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
   }, []);
 
   const handleBooking = async () => {
+    const { activeRideId, rideStatus } = useRideStore.getState();
+    const isStandardActive = activeRideId && (rideStatus === 'searching' || rideStatus === 'matched' || rideStatus === 'captain_arriving' || rideStatus === 'in_progress');
+    if (isStandardActive) {
+      Alert.alert(
+        'Active Trip in Progress',
+        'You cannot book another ride while a trip is currently in progress. Please complete or cancel your active trip first.'
+      );
+      return;
+    }
+
     if (!selectedSlot) {
       Alert.alert('Selection Required', 'Please choose a time slot for your ride.');
       return;

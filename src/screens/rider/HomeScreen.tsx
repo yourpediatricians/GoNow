@@ -21,6 +21,9 @@ import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { geocodingService } from '../../services/geocoding.service';
+import { useIsFocused } from '@react-navigation/native';
+import { rideService } from '../../services/ride.service';
+import { poolService } from '../../services/pool.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RiderTabs'> & { navigation: any };
 
@@ -69,8 +72,86 @@ const SERVICES = [
 
 export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const { user } = useAuthStore();
-  const { pickup, setPickup, setDropoff } = useRideStore();
+  const { pickup, setPickup, setDropoff, activeRideId, rideStatus } = useRideStore();
   const mapRef = useRef<any>(null);
+
+  const [activePoolId, setActivePoolId] = useState<string | null>(null);
+  const isFocused = useIsFocused();
+  const hasAutoRedirected = useRef(false);
+
+  useEffect(() => {
+    const checkActiveTrip = async () => {
+      try {
+        // 1. Check standard ride
+        const rideRes = await rideService.getActiveRiderRide();
+        if (rideRes.success && rideRes.data?.ride) {
+          const ride = rideRes.data.ride;
+          const status = ride.status;
+
+          useRideStore.setState({
+            activeRideId: ride._id,
+            activeRide: {
+              ...ride,
+              pickup: {
+                latitude: ride.pickup.coordinates[1],
+                longitude: ride.pickup.coordinates[0],
+                address: ride.pickup.address,
+                name: ride.pickup.name,
+              },
+              dropoff: {
+                latitude: ride.dropoff.coordinates[1],
+                longitude: ride.dropoff.coordinates[0],
+                address: ride.dropoff.address,
+                name: ride.dropoff.name,
+              },
+            },
+            rideStatus: status === 'requested' ? 'searching' : status,
+            rideOtp: ride.otp,
+            captain: ride.captain ? {
+              id: ride.captain._id,
+              name: ride.captain.name,
+              phone: ride.captain.phone,
+              rating: ride.captain.rating || 5.0,
+              vehicle: rideRes.data.captainProfile?.vehicle || {},
+              totalRides: rideRes.data.captainProfile?.totalRides || 0,
+            } : null,
+          });
+
+          if (!hasAutoRedirected.current) {
+            hasAutoRedirected.current = true;
+            if (status === 'requested') {
+              navigation.navigate('RideSearch', { rideId: ride._id });
+            } else {
+              navigation.navigate('ActiveRide', { rideId: ride._id });
+            }
+          }
+          return;
+        } else {
+          useRideStore.setState({ activeRideId: null, activeRide: null, rideStatus: 'idle' });
+        }
+
+        // 2. Check economy pool
+        const poolRes = await poolService.getActiveRiderPool();
+        if (poolRes.success && poolRes.data?.pool) {
+          const pool = poolRes.data.pool;
+          setActivePoolId(pool._id);
+
+          if (!hasAutoRedirected.current) {
+            hasAutoRedirected.current = true;
+            navigation.navigate('EconomyMatching', { poolId: pool._id });
+          }
+        } else {
+          setActivePoolId(null);
+        }
+      } catch (err) {
+        console.warn('Error checking active trip:', err);
+      }
+    };
+
+    if (isFocused) {
+      checkActiveTrip();
+    }
+  }, [isFocused]);
 
   const savedHome = user?.savedAddresses?.find((addr: any) => 
     addr.label.toLowerCase() === 'home' && 
@@ -153,10 +234,28 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   }, []);
 
   const handleSearchDropoff = () => {
+    const isStandardActive = activeRideId && (rideStatus === 'searching' || rideStatus === 'matched' || rideStatus === 'captain_arriving' || rideStatus === 'in_progress');
+    const isEconomyActive = !!activePoolId;
+    if (isStandardActive || isEconomyActive) {
+      Alert.alert(
+        'Active Trip in Progress',
+        'You cannot book another ride while a trip is currently in progress. Please complete or cancel your active trip first.'
+      );
+      return;
+    }
     navigation.navigate('SelectLocation', { type: 'dropoff' });
   };
 
   const handleSelectService = (serviceId: string) => {
+    const isStandardActive = activeRideId && (rideStatus === 'searching' || rideStatus === 'matched' || rideStatus === 'captain_arriving' || rideStatus === 'in_progress');
+    const isEconomyActive = !!activePoolId;
+    if (isStandardActive || isEconomyActive) {
+      Alert.alert(
+        'Active Trip in Progress',
+        'You cannot book another ride while a trip is currently in progress. Please complete or cancel your active trip first.'
+      );
+      return;
+    }
     if (serviceId === 'economy') {
       navigation.navigate('EconomyBooking', { direction: 'to_metro' });
     } else {
@@ -168,6 +267,16 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   };
 
   const handleQuickDest = (dest: any) => {
+    const isStandardActive = activeRideId && (rideStatus === 'searching' || rideStatus === 'matched' || rideStatus === 'captain_arriving' || rideStatus === 'in_progress');
+    const isEconomyActive = !!activePoolId;
+    if (isStandardActive || isEconomyActive) {
+      Alert.alert(
+        'Active Trip in Progress',
+        'You cannot book another ride while a trip is currently in progress. Please complete or cancel your active trip first.'
+      );
+      return;
+    }
+
     if (!dest.isSet) {
       Alert.alert(
         `Set ${dest.label} Address`,
@@ -204,6 +313,58 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       pickup: activePickup,
       dropoff: dropoffLoc,
     });
+  };
+
+  const renderActiveRideBanner = () => {
+    // 1. Standard active ride
+    const isStandardActive = activeRideId && (rideStatus === 'searching' || rideStatus === 'matched' || rideStatus === 'captain_arriving' || rideStatus === 'in_progress');
+    // 2. Economy active pool
+    const isEconomyActive = !!activePoolId;
+
+    if (!isStandardActive && !isEconomyActive) return null;
+
+    const bannerTitle = isStandardActive 
+      ? (rideStatus === 'searching' ? '🔍 Finding Your Captain...' : '🏍️ Trip in Progress')
+      : '🛺 Shared Trip in Progress';
+
+    const bannerSubtitle = isStandardActive
+      ? (rideStatus === 'searching' ? 'Looking for captains nearby' : 'Track captain & view OTP')
+      : 'View matching progress & boarded status';
+
+    const handlePressBanner = () => {
+      if (isStandardActive) {
+        if (rideStatus === 'searching') {
+          navigation.navigate('RideSearch', { rideId: activeRideId });
+        } else {
+          navigation.navigate('ActiveRide', { rideId: activeRideId });
+        }
+      } else if (isEconomyActive) {
+        navigation.navigate('EconomyMatching', { poolId: activePoolId! });
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        style={styles.activeRideBanner}
+        onPress={handlePressBanner}
+        activeOpacity={0.85}>
+        <LinearGradient
+          colors={['#FF5A1F', '#E24A12']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.activeRideBannerGrad}>
+          <View style={styles.activeRideBannerContent}>
+            <View style={styles.activeRideBannerLeft}>
+              <Text style={styles.activeRideBannerTitle}>{bannerTitle}</Text>
+              <Text style={styles.activeRideBannerSubtitle}>{bannerSubtitle}</Text>
+            </View>
+            <View style={styles.activeRideBannerRight}>
+              <Text style={styles.activeRideBannerArrow}>Track Trip ➔</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
   };
 
   const greeting = () => {
@@ -249,6 +410,8 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
 
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
+        {renderActiveRideBanner()}
+
         {/* Where to? */}
         <TouchableOpacity style={styles.searchBar} activeOpacity={0.85} onPress={handleSearchDropoff}>
           <View style={styles.searchDot} />
@@ -354,7 +517,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.md,
   },
-  locateBtnText: { fontSize: 18 },
+  activeRideBanner: {
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+    ...Shadow.md,
+  },
+  activeRideBannerGrad: {
+    padding: Spacing.md,
+  },
+  activeRideBannerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activeRideBannerLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  activeRideBannerTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  },
+  activeRideBannerSubtitle: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  activeRideBannerRight: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+  },
+  activeRideBannerArrow: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+  },
   bottomPanel: {
     position: 'absolute',
     bottom: 0,

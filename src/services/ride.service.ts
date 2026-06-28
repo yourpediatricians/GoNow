@@ -48,11 +48,16 @@ export const rideService = {
     return data;
   },
 
-  /**
-   * Cancel an active ride (rider or captain).
-   */
   cancelRide: async (rideId: string, reason?: string) => {
     const { data } = await api.post(`/rides/${rideId}/cancel`, { reason });
+    return data;
+  },
+
+  /**
+   * Get active ride for the rider.
+   */
+  getActiveRiderRide: async () => {
+    const { data } = await api.get('/rides/active/rider');
     return data;
   },
 

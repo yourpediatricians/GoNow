@@ -38,6 +38,14 @@ export const poolService = {
     return data;
   },
 
+  /**
+   * Get active pool for the rider.
+   */
+  getActiveRiderPool: async () => {
+    const { data } = await api.get('/pools/active/rider');
+    return data;
+  },
+
   startPool: async (poolId: string) => {
     const { data } = await api.post(`/pools/${poolId}/start`);
     return data;
