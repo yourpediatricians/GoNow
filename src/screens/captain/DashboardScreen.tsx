@@ -158,9 +158,11 @@ export const CaptainDashboardScreen: React.FC = () => {
     try {
       const res = await captainService.getRideHistory(1, 5);
       if (res.success && res.data) {
-        const list = res.data.history || res.data;
+        const list = res.data.rides || res.data.history || res.data;
         if (Array.isArray(list)) {
           setRecentRides(list);
+        } else if (list && Array.isArray(list.rides)) {
+          setRecentRides(list.rides);
         }
       }
     } catch (err) {
@@ -857,17 +859,26 @@ export const CaptainDashboardScreen: React.FC = () => {
     const isMatched = status === 'matched';
     const isStarted = status === 'started';
 
-    const maujpurCoords: [number, number] = [77.2715, 28.6891];
-    const metroCoords: [number, number] = [77.3216, 28.6759];
+    const firstRider = activePoolDetails.riders?.[0];
+    const metroCoords: [number, number] = activePoolDetails.zone?.metroStation?.coordinates || [77.3216, 28.6759];
+    const metroName = activePoolDetails.zone?.metroStation?.name || 'Dilshad Garden Metro';
+
+    const riderCoords: [number, number] = activePoolDetails.direction === 'to_home'
+      ? (firstRider?.dropoff?.coordinates || [77.2715, 28.6891])
+      : (firstRider?.pickup?.coordinates || [77.2715, 28.6891]);
+
+    const riderAddress = activePoolDetails.direction === 'to_home'
+      ? (firstRider?.dropoff?.address || activePoolDetails.zone?.name || 'Destination')
+      : (firstRider?.pickup?.address || activePoolDetails.zone?.name || 'Pickup Location');
 
     const poolPickup = {
-      coordinates: activePoolDetails.direction === 'to_home' ? metroCoords : maujpurCoords,
-      address: activePoolDetails.direction === 'to_home' ? 'Dilshad Garden Metro' : 'Maujpur, Delhi',
+      coordinates: activePoolDetails.direction === 'to_home' ? metroCoords : riderCoords,
+      address: activePoolDetails.direction === 'to_home' ? metroName : riderAddress,
     };
 
     const poolDropoff = {
-      coordinates: activePoolDetails.direction === 'to_home' ? maujpurCoords : metroCoords,
-      address: activePoolDetails.direction === 'to_home' ? 'Maujpur, Delhi' : 'Dilshad Garden Metro',
+      coordinates: activePoolDetails.direction === 'to_home' ? riderCoords : metroCoords,
+      address: activePoolDetails.direction === 'to_home' ? riderAddress : metroName,
     };
 
     return (

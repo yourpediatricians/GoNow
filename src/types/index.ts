@@ -153,7 +153,7 @@ export type RiderStackParamList = {
   Booking: { pickup: Location; dropoff: Location; preSelectedRide?: RideType };
   RideSearch: { rideId: string };
   ActiveRide: { rideId: string };
-  RideComplete: { rideId: string; fare: number; distance: number; rideType: RideType };
+  RideComplete: { ride: any };
   SelectLocation: {
     type: 'pickup' | 'dropoff';
     originScreen?: 'Booking' | 'EconomyBooking';

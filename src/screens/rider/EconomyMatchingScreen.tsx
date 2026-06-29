@@ -16,6 +16,7 @@ import { RiderStackParamList, CaptainInfo } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { getSocket, connectSocket } from '../../services/socket.service';
 import { poolService } from '../../services/pool.service';
+import { rideService } from '../../services/ride.service';
 import { useAuthStore } from '../../store/authStore';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'EconomyMatching'>;
@@ -23,7 +24,7 @@ const { width } = Dimensions.get('window');
 
 export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { poolId } = route.params;
-  const [status, setStatus] = useState<'waiting' | 'matched' | 'started'>('waiting');
+  const [status, setStatus] = useState<'waiting' | 'matched' | 'started' | 'completed'>('waiting');
   const [ridersCount, setRidersCount] = useState<number>(1);
   const [timerStartAt, setTimerStartAt] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<string>('Waiting for others...');
@@ -189,6 +190,50 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
       );
     };
 
+    const poolCompletedHandler = (data: any) => {
+      setStatus('completed');
+      Alert.alert('Trip Completed', 'Your shared e-rickshaw trip has completed successfully.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (myRideId) {
+              rideService.getRideById(myRideId).then((result) => {
+                const finalRide = result.data || {};
+                const formattedRide = {
+                  rideId: finalRide._id || myRideId,
+                  pickup: {
+                    address: finalRide.pickup?.address || '',
+                    latitude: finalRide.pickup?.coordinates?.[1] || 0,
+                    longitude: finalRide.pickup?.coordinates?.[0] || 0,
+                  },
+                  dropoff: {
+                    address: finalRide.dropoff?.address || '',
+                    latitude: finalRide.dropoff?.coordinates?.[1] || 0,
+                    longitude: finalRide.dropoff?.coordinates?.[0] || 0,
+                  },
+                  rideType: finalRide.rideType || 'economy',
+                  fare: finalRide.fare?.actual || finalRide.fare?.estimated || 15,
+                  distance: finalRide.distance || 0,
+                  duration: finalRide.actualDuration || finalRide.estimatedDuration || 0,
+                  status: finalRide.status || 'completed',
+                  date: finalRide.createdAt || new Date(),
+                  captain: {
+                    name: matchedCaptain?.name || 'Captain',
+                    rating: matchedCaptain?.rating || 5.0,
+                  },
+                };
+                navigation.replace('RideComplete', { ride: formattedRide });
+              }).catch(() => {
+                navigation.navigate('RiderTabs');
+              });
+            } else {
+              navigation.navigate('RiderTabs');
+            }
+          }
+        }
+      ]);
+    };
+
     // Fallback Polling: check every 4 seconds while waiting or matched
     const pollInterval = setInterval(() => {
       if (statusRef.current === 'waiting' || statusRef.current === 'matched') {
@@ -220,6 +265,7 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
         sock.on('pool:started', poolStartedHandler);
         sock.on('pool:rerouted', poolReroutedHandler);
         sock.on('pool:cancelled', poolCancelledHandler);
+        sock.on('pool:completed', poolCompletedHandler);
       } catch (err) {
         console.warn('Socket connection failed in EconomyMatchingScreen:', err);
       }
@@ -237,9 +283,10 @@ export const EconomyMatchingScreen: React.FC<Props> = ({ navigation, route }) =>
         socketInstance.off('pool:started', poolStartedHandler);
         socketInstance.off('pool:rerouted', poolReroutedHandler);
         socketInstance.off('pool:cancelled', poolCancelledHandler);
+        socketInstance.off('pool:completed', poolCompletedHandler);
       }
     };
-  }, [poolId, myRideId]);
+  }, [poolId, myRideId, matchedCaptain]);
 
   // Wait timer countdown logic
   useEffect(() => {

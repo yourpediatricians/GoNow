@@ -138,7 +138,15 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
 
           if (!hasAutoRedirected.current) {
             hasAutoRedirected.current = true;
-            navigation.navigate('EconomyMatching', { poolId: pool._id });
+            
+            const currentUser = useAuthStore.getState().user;
+            const myRide = poolRes.data.rides?.find((r: any) => r.riderId === currentUser?.id);
+            
+            if (pool.status === 'started' && myRide) {
+              navigation.navigate('ActiveRide', { rideId: myRide.rideId });
+            } else {
+              navigation.navigate('EconomyMatching', { poolId: pool._id });
+            }
           }
         } else {
           setActivePoolId(null);
