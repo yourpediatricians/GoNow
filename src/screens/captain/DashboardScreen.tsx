@@ -12,6 +12,7 @@ import {
   TextInput,
   PermissionsAndroid,
   Platform,
+  Modal,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useCaptainStore } from '../../store/captainStore';
@@ -50,6 +51,7 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [verifyingRideId, setVerifyingRideId] = useState<string | null>(null);
   const [poolOtpCode, setPoolOtpCode] = useState<string>('');
   const [recentRides, setRecentRides] = useState<any[]>([]);
+  const [selectedHistoryRide, setSelectedHistoryRide] = useState<any | null>(null);
   const [captainLocation, setCaptainLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const formatIncomingPoolRequest = async (payload: any) => {
@@ -185,6 +187,18 @@ export const CaptainDashboardScreen: React.FC = () => {
     try {
       const d = new Date(dateStr);
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getRideDateTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const dateOption: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+      const timeOption: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+      return `${d.toLocaleDateString([], dateOption)}, ${d.toLocaleTimeString([], timeOption)}`;
     } catch {
       return dateStr;
     }
@@ -1336,8 +1350,20 @@ export const CaptainDashboardScreen: React.FC = () => {
               recentRides.map((ride: any) => {
                 const isDbRide = !!ride.pickup;
                 const emoji = isDbRide ? getRideTypeEmoji(ride.rideType) : '🏍️';
-                const fromLabel = isDbRide ? (ride.pickup.name || ride.pickup.address.split(',')[0]) : '';
-                const toLabel = isDbRide ? (ride.dropoff.name || ride.dropoff.address.split(',')[0]) : '';
+                const formatLocationLabel = (loc: any) => {
+                  if (!loc) return '';
+                  const name = (loc.name || '').trim();
+                  const address = (loc.address || '').trim();
+                  const addressPart = address.split(',')[0] || '';
+                  const isGeneric = ['my location', 'home', 'work', 'office', 'saved location'].includes(name.toLowerCase());
+                  if (isGeneric || !name) {
+                    return addressPart || name;
+                  }
+                  return name;
+                };
+
+                const fromLabel = isDbRide ? formatLocationLabel(ride.pickup) : '';
+                const toLabel = isDbRide ? formatLocationLabel(ride.dropoff) : '';
                 const timeLabel = isDbRide ? getRideTime(ride.date || ride.createdAt) : '';
                 const durationLabel = isDbRide ? `${ride.duration || 10} min` : '';
                 const rawFare = isDbRide ? (ride.actualFare || ride.fare) : '';
@@ -1346,7 +1372,12 @@ export const CaptainDashboardScreen: React.FC = () => {
                   : (rawFare || 0);
 
                 return (
-                  <View key={ride.id || ride._id} style={styles.recentCard}>
+                  <TouchableOpacity
+                    key={ride.id || ride._id}
+                    style={styles.recentCard}
+                    onPress={() => setSelectedHistoryRide(ride)}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.recentIcon}>
                       <Text style={{ fontSize: 20 }}>{emoji}</Text>
                     </View>
@@ -1355,7 +1386,7 @@ export const CaptainDashboardScreen: React.FC = () => {
                       <Text style={styles.recentMeta}>{timeLabel} · {durationLabel}</Text>
                     </View>
                     <Text style={styles.recentFare}>₹{fareLabel}</Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             ) : (
@@ -1387,6 +1418,94 @@ export const CaptainDashboardScreen: React.FC = () => {
 
         <View style={{ height: Spacing['3xl'] }} />
       </ScrollView>
+
+      {/* Recent Ride Details Modal */}
+      <Modal
+        visible={!!selectedHistoryRide}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedHistoryRide(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject} 
+            activeOpacity={1} 
+            onPress={() => setSelectedHistoryRide(null)} 
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Trip Details</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseBtn} 
+                onPress={() => setSelectedHistoryRide(null)}
+              >
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedHistoryRide && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBody}>
+                {/* Header Badge */}
+                <View style={styles.detailBadgeRow}>
+                  <View style={styles.serviceBadge}>
+                    <Text style={styles.serviceBadgeText}>
+                      {selectedHistoryRide.rideType === 'economy' ? '🛺 Shared Pool' : '🏍️ Bike Ride'}
+                    </Text>
+                  </View>
+                  <Text style={styles.detailTime}>
+                    {getRideDateTime(selectedHistoryRide.date || selectedHistoryRide.createdAt)}
+                  </Text>
+                </View>
+
+                {/* Ride route path visualization */}
+                <View style={styles.routeContainer}>
+                  <View style={styles.routeIconColumn}>
+                    <View style={styles.routeDotGreen} />
+                    <View style={styles.modalRouteLine} />
+                    <View style={styles.routeDotRed} />
+                  </View>
+                  <View style={styles.routeLabelColumn}>
+                    <View style={styles.routePoint}>
+                      <Text style={styles.routePointLabel}>Pickup Location</Text>
+                      <Text style={styles.routePointAddress}>{selectedHistoryRide.pickup?.address || 'Pickup'}</Text>
+                    </View>
+                    <View style={styles.routePoint}>
+                      <Text style={styles.routePointLabel}>Drop-off Location</Text>
+                      <Text style={styles.routePointAddress}>{selectedHistoryRide.dropoff?.address || 'Dropoff'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Earnings & metrics */}
+                <View style={styles.metricsGrid}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricModalLabel}>Earnings</Text>
+                    <Text style={styles.metricModalVal}>
+                      ₹{typeof (selectedHistoryRide.actualFare || selectedHistoryRide.fare) === 'object'
+                        ? ((selectedHistoryRide.actualFare || selectedHistoryRide.fare)?.actual || (selectedHistoryRide.actualFare || selectedHistoryRide.fare)?.estimated || 0)
+                        : (selectedHistoryRide.actualFare || selectedHistoryRide.fare || 0)
+                      }
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricModalLabel}>Distance</Text>
+                    <Text style={styles.metricModalVal}>{selectedHistoryRide.distance || 0} km</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricModalLabel}>Duration</Text>
+                    <Text style={styles.metricModalVal}>{selectedHistoryRide.duration || 10} mins</Text>
+                  </View>
+                </View>
+
+                {/* Ride ID footer */}
+                <Text style={styles.modalRideId}>
+                  Ride ID: {selectedHistoryRide.id || selectedHistoryRide._id}
+                </Text>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1764,5 +1883,159 @@ const styles = StyleSheet.create({
   inlineCancelBtnText: {
     color: Colors.textMuted,
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    maxHeight: '80%',
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceBorder,
+    paddingBottom: Spacing.sm,
+  },
+  modalTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+  },
+  modalCloseBtnText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.bold,
+  },
+  modalBody: {
+    paddingVertical: Spacing.sm,
+  },
+  detailBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  serviceBadge: {
+    backgroundColor: Colors.primary + '15',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  serviceBadgeText: {
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+  },
+  detailTime: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+  },
+  routeContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    marginBottom: Spacing.lg,
+  },
+  routeIconColumn: {
+    width: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.xs,
+  },
+  routeDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
+  },
+  modalRouteLine: {
+    flex: 1,
+    width: 2,
+    backgroundColor: Colors.surfaceBorder,
+    marginVertical: 4,
+  },
+  routeDotRed: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.error,
+  },
+  routeLabelColumn: {
+    flex: 1,
+    marginLeft: Spacing.md,
+    gap: Spacing.md,
+  },
+  routePoint: {
+    flexDirection: 'column',
+  },
+  routePointLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    fontWeight: FontWeight.bold,
+    marginBottom: 2,
+  },
+  routePointAddress: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  metricItem: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    alignItems: 'center',
+  },
+  metricModalLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: FontWeight.bold,
+  },
+  metricModalVal: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  modalRideId: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: Spacing.md,
   },
 });
