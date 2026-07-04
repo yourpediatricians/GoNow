@@ -21,27 +21,12 @@ const WEEKLY_DATA = [
   { day: 'Sun', amount: 960, rides: 9 },
 ];
 
-const EARNINGS_BY_PERIOD: Record<Period, { total: number; rides: number; hours: string; avg: number }> = {
-  today: { total: 960, rides: 9, hours: '6.5 hrs', avg: 107 },
-  week: { total: 8770, rides: 84, hours: '52 hrs', avg: 104 },
-  month: { total: 34200, rides: 320, hours: '205 hrs', avg: 107 },
-};
-
-const INCENTIVES = [
-  { icon: '🎯', title: '10-Ride Bonus', desc: 'Complete 10 rides today', reward: '₹150', progress: 9, total: 10 },
-  { icon: '⏰', title: 'Peak Hour Surge', desc: 'Earn 1.5x from 5–8 PM', reward: '1.5x', progress: 0, total: 1, isActive: true },
-  { icon: '⭐', title: 'Rating Bonus', desc: 'Maintain 4.8+ rating', reward: '₹200/wk', progress: 4.9, total: 5, isRating: true },
-];
-
-const RECENT_EARNINGS = [
-  { id: 'e1', from: 'Koramangala', to: 'MG Road', fare: 85, tip: 20, time: '9:15 AM', km: 4.2 },
-  { id: 'e2', from: 'HSR Layout', to: 'Silk Board', fare: 110, tip: 0, time: '8:00 AM', km: 6.8 },
-  { id: 'e3', from: 'BTM Layout', to: 'Jayanagar', fare: 70, tip: 10, time: '7:20 AM', km: 3.1 },
-];
-
 export const CaptainEarningsScreen: React.FC = () => {
   const [period, setPeriod] = useState<Period>('week');
-  const { weeklyEarnings, todayEarnings, todayRides, totalEarnings, acceptanceRate, fetchEarnings } = useCaptainStore();
+  const {
+    weeklyEarnings, todayEarnings, todayRides, totalEarnings, acceptanceRate, fetchEarnings,
+    totalRides, completedRides, cancelledRides, acceptedRides
+  } = useCaptainStore();
 
   useEffect(() => {
     fetchEarnings();
@@ -116,9 +101,12 @@ export const CaptainEarningsScreen: React.FC = () => {
           <View style={s.chart}>
             {chartData.map((d, i) => {
               const isToday = i === 6;
+              const formattedAmount = d.amount >= 1000 
+                ? `₹${(d.amount / 1000).toFixed(1)}k` 
+                : `₹${d.amount}`;
               return (
                 <View key={i} style={s.barWrap}>
-                  <Text style={s.barAmt}>₹{(d.amount / 1000).toFixed(1)}k</Text>
+                  <Text style={s.barAmt}>{formattedAmount}</Text>
                   <View style={s.barTrack}>
                     <LinearGradient
                       colors={isToday ? [Colors.primaryLight, Colors.primary] : [Colors.surfaceElevated, Colors.surfaceBorder]}
@@ -133,60 +121,45 @@ export const CaptainEarningsScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Incentives */}
+        {/* Ride Performance */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Incentives & Bonuses</Text>
-          {INCENTIVES.map((inc, i) => (
-            <View key={i} style={s.incCard}>
-              <View style={s.incHeader}>
-                <Text style={{ fontSize: 24 }}>{inc.icon}</Text>
-                <View style={s.incInfo}>
-                  <Text style={s.incTitle}>{inc.title}</Text>
-                  <Text style={s.incDesc}>{inc.desc}</Text>
-                </View>
-                <View style={[s.rewardBadge, (inc as any).isActive && s.rewardBadgeActive]}>
-                  <Text style={[s.rewardText, (inc as any).isActive && s.rewardTextActive]}>{inc.reward}</Text>
-                </View>
+          <Text style={s.sectionTitle}>Ride Performance</Text>
+          <View style={s.performanceContainer}>
+            <View style={s.perfRow}>
+              <View style={s.perfCard}>
+                <Text style={s.perfVal}>{totalRides}</Text>
+                <Text style={s.perfLabel}>Total Requests</Text>
               </View>
-              {!((inc as any).isActive) && (
-                <View style={s.progressRow}>
-                  <View style={s.progressTrack}>
-                    <View style={[s.progressFill, { width: `${((inc as any).isRating ? (inc.progress / inc.total) * 100 : (inc.progress / inc.total) * 100)}%` }]} />
-                  </View>
-                  <Text style={s.progressText}>
-                    {(inc as any).isRating ? `${inc.progress}/${inc.total}⭐` : `${inc.progress}/${inc.total}`}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* Recent rides */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Recent Rides</Text>
-          {RECENT_EARNINGS.map(r => (
-            <View key={r.id} style={s.rideRow}>
-              <View style={s.rideIcon}><Text style={{ fontSize: 18 }}>🏍️</Text></View>
-              <View style={s.rideInfo}>
-                <Text style={s.rideRoute}>{r.from} → {r.to}</Text>
-                <Text style={s.rideMeta}>{r.time} · {r.km} km</Text>
-              </View>
-              <View style={s.rideFare}>
-                <Text style={s.rideFareValue}>₹{r.fare}</Text>
-                {r.tip > 0 && <Text style={s.rideTip}>+₹{r.tip} tip</Text>}
+              <View style={s.perfCard}>
+                <Text style={s.perfVal}>{acceptedRides}</Text>
+                <Text style={s.perfLabel}>Accepted Rides</Text>
               </View>
             </View>
-          ))}
-        </View>
-
-        {/* Withdraw */}
-        <View style={s.withdrawSection}>
-          <TouchableOpacity style={s.withdrawBtn} activeOpacity={0.9}>
-            <LinearGradient colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.withdrawGrad}>
-              <Text style={s.withdrawText}>💳  Withdraw ₹{stats.total.toLocaleString()}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            <View style={s.perfRow}>
+              <View style={s.perfCard}>
+                <Text style={s.perfVal}>{completedRides}</Text>
+                <Text style={s.perfLabel}>Completed Rides</Text>
+              </View>
+              <View style={s.perfCard}>
+                <Text style={[s.perfVal, s.cancelledVal]}>{cancelledRides}</Text>
+                <Text style={s.perfLabel}>Cancelled Rides</Text>
+              </View>
+            </View>
+            <View style={s.perfRow}>
+              <View style={s.perfCard}>
+                <Text style={s.perfVal}>
+                  {totalRides > 0 ? Math.round((acceptedRides / totalRides) * 100) : 100}%
+                </Text>
+                <Text style={s.perfLabel}>Acceptance Rate</Text>
+              </View>
+              <View style={s.perfCard}>
+                <Text style={s.perfVal}>
+                  {acceptedRides > 0 ? Math.round((completedRides / acceptedRides) * 100) : 100}%
+                </Text>
+                <Text style={s.perfLabel}>Completion Rate</Text>
+              </View>
+            </View>
+          </View>
         </View>
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -221,29 +194,34 @@ const s = StyleSheet.create({
   barDay: { fontSize: FontSize.xs, color: Colors.textMuted },
   barDayActive: { color: Colors.primary, fontWeight: FontWeight.bold },
   barRides: { fontSize: 8, color: Colors.textMuted },
-  incCard: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.base, borderWidth: 1, borderColor: Colors.surfaceBorder, marginBottom: Spacing.sm },
-  incHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  incInfo: { flex: 1 },
-  incTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  incDesc: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  rewardBadge: { backgroundColor: 'rgba(255,90,31,0.1)', borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(255,90,31,0.3)' },
-  rewardBadgeActive: { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)' },
-  rewardText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.bold },
-  rewardTextActive: { color: Colors.success },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm },
-  progressTrack: { flex: 1, height: 4, backgroundColor: Colors.surfaceBorder, borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-  progressText: { fontSize: FontSize.xs, color: Colors.textMuted, minWidth: 40, textAlign: 'right' },
-  rideRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: Spacing.md },
-  rideIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,90,31,0.1)', alignItems: 'center', justifyContent: 'center' },
-  rideInfo: { flex: 1 },
-  rideRoute: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textPrimary },
-  rideMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  rideFare: { alignItems: 'flex-end' },
-  rideFareValue: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.primary },
-  rideTip: { fontSize: FontSize.xs, color: Colors.success },
-  withdrawSection: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
-  withdrawBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden' },
-  withdrawGrad: { paddingVertical: Spacing.lg, alignItems: 'center', justifyContent: 'center', ...Shadow.glow },
-  withdrawText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
+  performanceContainer: {
+    gap: Spacing.md,
+  },
+  perfRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  perfCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    gap: 4,
+  },
+  perfVal: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.black,
+    color: Colors.textPrimary,
+  },
+  perfLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.medium,
+  },
+  cancelledVal: {
+    color: Colors.error,
+  },
 });

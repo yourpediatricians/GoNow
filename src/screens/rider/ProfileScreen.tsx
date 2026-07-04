@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
+import { useCaptainStore } from '../../store/captainStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
 const MENU_ITEMS = [
@@ -27,7 +28,14 @@ const MENU_ITEMS = [
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuthStore();
+  const { totalRides, fetchEarnings } = useCaptainStore();
   const navigation = useNavigation<any>();
+
+  useEffect(() => {
+    if (user?.role === 'captain') {
+      fetchEarnings();
+    }
+  }, [user?.role]);
 
   const filteredMenuItems = MENU_ITEMS.map(section => {
     if (section.section === 'Account' && user?.role === 'captain') {
@@ -79,8 +87,8 @@ export const ProfileScreen: React.FC = () => {
           {/* Stats */}
           <View style={styles.statsRow}>
             {[
-              { value: `${user?.rating}⭐`, label: 'Rating' },
-              { value: `${user?.totalRides}`, label: 'Rides' },
+              { value: `${user?.rating || 5.0}⭐`, label: 'Rating' },
+              { value: user?.role === 'captain' ? `${totalRides}` : `${user?.totalRides || 0}`, label: 'Rides' },
               { value: user?.memberSince || 'June 2024', label: 'Member Since' },
             ].map((stat, i) => (
               <View key={i} style={styles.statItem}>

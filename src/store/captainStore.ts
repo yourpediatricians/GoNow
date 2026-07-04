@@ -19,6 +19,10 @@ interface CaptainState {
   acceptanceRate: number;
   activeRideId: string | null; // captain's current ride
   isLoading: boolean;
+  totalRides: number;
+  completedRides: number;
+  cancelledRides: number;
+  acceptedRides: number;
 
   // Actions (local state)
   setOnline: (online: boolean) => void;
@@ -54,6 +58,10 @@ export const useCaptainStore = create<CaptainState>((set) => ({
   acceptanceRate: 0,
   activeRideId: null,
   isLoading: false,
+  totalRides: 0,
+  completedRides: 0,
+  cancelledRides: 0,
+  acceptedRides: 0,
 
   setOnline: (isOnline) => set({ isOnline }),
   setCurrentLocation: (currentLocation) => set({ currentLocation }),
@@ -110,6 +118,10 @@ export const useCaptainStore = create<CaptainState>((set) => ({
         totalEarnings: d.totalEarnings || 0,
         acceptanceRate: d.acceptanceRate || 0,
         weeklyEarnings: d.weeklyEarnings || [],
+        totalRides: d.totalRides || 0,
+        completedRides: d.completedRides || 0,
+        cancelledRides: d.cancelledRides || 0,
+        acceptedRides: d.acceptedRides || 0,
       });
     } catch {
       // Fail silently

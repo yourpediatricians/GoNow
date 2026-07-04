@@ -35,6 +35,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     todayEarnings, todayRides, weeklyEarnings,
     incomingRequest, setIncomingRequest, isLoading,
     activeRideId, setActiveRideId, acceptanceRate,
+    totalRides, acceptedRides,
   } = useCaptainStore();
   const { user } = useAuthStore();
 
@@ -1307,12 +1308,16 @@ export const CaptainDashboardScreen: React.FC = () => {
               </View>
               <View style={styles.earningsMetaDivider} />
               <View style={styles.earningsMetaItem}>
-                <Text style={styles.earningsMetaValue}>4.9⭐</Text>
+                <Text style={styles.earningsMetaValue}>
+                  {user?.rating && typeof user.rating === 'number' ? user.rating.toFixed(1) : '5.0'}⭐
+                </Text>
                 <Text style={styles.earningsMetaLabel}>Rating</Text>
               </View>
               <View style={styles.earningsMetaDivider} />
               <View style={styles.earningsMetaItem}>
-                <Text style={styles.earningsMetaValue}>{acceptanceRate}</Text>
+                <Text style={styles.earningsMetaValue}>
+                  {totalRides > 0 ? Math.round((acceptedRides / totalRides) * 100) : 100}%
+                </Text>
                 <Text style={styles.earningsMetaLabel}>Acceptance</Text>
               </View>
             </View>
@@ -1447,10 +1452,19 @@ export const CaptainDashboardScreen: React.FC = () => {
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBody}>
                 {/* Header Badge */}
                 <View style={styles.detailBadgeRow}>
-                  <View style={styles.serviceBadge}>
-                    <Text style={styles.serviceBadgeText}>
-                      {selectedHistoryRide.rideType === 'economy' ? '🛺 Shared Pool' : '🏍️ Bike Ride'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' }}>
+                    <View style={styles.serviceBadge}>
+                      <Text style={styles.serviceBadgeText}>
+                        {selectedHistoryRide.rideType === 'economy' ? '🛺 Shared Pool' : '🏍️ Bike Ride'}
+                      </Text>
+                    </View>
+                    {selectedHistoryRide.rideType === 'economy' && (
+                      <View style={[styles.serviceBadge, { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)' }]}>
+                        <Text style={[styles.serviceBadgeText, { color: Colors.success }]}>
+                          👥 {selectedHistoryRide.poolId?.riders?.length || 1}/4 Passengers
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.detailTime}>
                     {getRideDateTime(selectedHistoryRide.date || selectedHistoryRide.createdAt)}
