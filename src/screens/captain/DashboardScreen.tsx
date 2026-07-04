@@ -1340,7 +1340,10 @@ export const CaptainDashboardScreen: React.FC = () => {
                 const toLabel = isDbRide ? (ride.dropoff.name || ride.dropoff.address.split(',')[0]) : '';
                 const timeLabel = isDbRide ? getRideTime(ride.date || ride.createdAt) : '';
                 const durationLabel = isDbRide ? `${ride.duration || 10} min` : '';
-                const fareLabel = isDbRide ? (ride.actualFare || ride.fare) : '';
+                const rawFare = isDbRide ? (ride.actualFare || ride.fare) : '';
+                const fareLabel = typeof rawFare === 'object' && rawFare !== null
+                  ? (rawFare.actual || rawFare.estimated || 0)
+                  : (rawFare || 0);
 
                 return (
                   <View key={ride.id || ride._id} style={styles.recentCard}>
