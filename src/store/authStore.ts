@@ -120,6 +120,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         rating: user.rating || 0.0,
         totalRides: user.totalRides || 0,
         savedAddresses: user.savedAddresses || [],
+        isDocumentVerified: user.isDocumentVerified || false,
+        email: user.email || '',
+        gender: user.gender || '',
+        dob: user.dob || '',
+        vehicle: user.vehicle || undefined,
       };
 
       set({ user: appUser, token: accessToken });
@@ -167,6 +172,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           rating: user.rating || 5.0,
           totalRides: user.totalRides || 0,
           savedAddresses: user.savedAddresses || [],
+          isDocumentVerified: user.isDocumentVerified || false,
+          email: user.email || '',
+          gender: user.gender || '',
+          dob: user.dob || '',
+          vehicle: user.vehicle || undefined,
         };
 
         set({ user: appUser, token: accessToken });

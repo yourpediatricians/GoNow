@@ -9,7 +9,10 @@ export const captainService = {
   updateProfile: async (updates: {
     name?: string;
     email?: string;
+    gender?: string;
+    dob?: string;
     vehicle?: { type?: string; make?: string; model?: string; color?: string; plateNumber?: string; year?: number };
+    documents?: { drivingLicense?: string; rcBook?: string; insurance?: string };
   }) => {
     const { data } = await api.put('/captain/profile', updates);
     return data;

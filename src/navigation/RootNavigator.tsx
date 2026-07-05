@@ -32,6 +32,7 @@ import { SupportScreen } from '../screens/rider/SupportScreen';
 // Screens - Captain
 import { CaptainDashboardScreen } from '../screens/captain/DashboardScreen';
 import { CaptainEarningsScreen } from '../screens/captain/EarningsScreen';
+import { CaptainVerificationScreen } from '../screens/captain/VerificationScreen';
 
 // Store
 import { useAuthStore } from '../store/authStore';
@@ -163,6 +164,8 @@ export const RootNavigator = () => {
         ) : user.role === 'captain' ? (
           !user.name ? (
             <RootStack.Screen name="CaptainOnboarding" component={CaptainOnboardingScreen} />
+          ) : !user.isDocumentVerified ? (
+            <RootStack.Screen name="CaptainVerification" component={CaptainVerificationScreen} />
           ) : (
             <RootStack.Screen name="Captain" component={CaptainTabNavigator} />
           )

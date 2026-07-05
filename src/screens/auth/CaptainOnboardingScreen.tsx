@@ -78,9 +78,11 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
     if (!rcNo.trim()) { Alert.alert('Required', 'Please enter RC (Registration Certificate) number'); return; }
     setIsSubmitting(true);
     try {
-      await captainService.updateProfile({
+      const res = await captainService.updateProfile({
         name,
         ...(email.trim() ? { email: email.trim() } : {}),
+        gender,
+        dob,
         vehicle: {
           type: vehicleType,
           make: vehicleMake,
@@ -89,7 +91,17 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
           plateNumber: licensePlate,
           year: vehicleYear.trim() ? parseInt(vehicleYear) : undefined,
         },
+        documents: {
+          drivingLicense: licenceNo.trim().toUpperCase(),
+          rcBook: rcNo.trim().toUpperCase(),
+          insurance: insuranceNo.trim() ? insuranceNo.trim().toUpperCase() : undefined,
+        }
       });
+      
+      // Cache response user in a local variable or store
+      if (res.data?.user) {
+        useAuthStore.getState().updateProfile(res.data.user);
+      }
 
       setIsSubmitting(false);
       animateNext('done');
@@ -103,18 +115,17 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
   };
 
   const handleGoLive = async () => {
-    // 1. Update in-memory store → RootNavigator re-renders and shows CaptainTabNavigator
-    useAuthStore.getState().updateProfile({ name });
+    // 1. Update in-memory store → RootNavigator re-renders and shows CaptainVerificationScreen
+    useAuthStore.getState().updateProfile({ isDocumentVerified: false });
 
-    // 2. Persist name into AsyncStorage so on next app launch
-    //    loadFromStorage restores an appUser with a name, skipping onboarding.
+    // 2. Persist updated user details into AsyncStorage so on next app launch
+    //    loadFromStorage restores them, routing to verification screen instead of onboarding.
     try {
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       const { STORAGE_KEYS } = await import('../../services/api');
-      const existing = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-      if (existing) {
-        const parsed = JSON.parse(existing);
-        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({ ...parsed, name }));
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
       }
     } catch (_) { /* silently ignore */ }
   };

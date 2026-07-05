@@ -23,6 +23,7 @@ export interface User {
   memberSince?: string;
   savedAddresses?: SavedAddress[];
   vehicle?: Vehicle;
+  isDocumentVerified?: boolean;
 }
 
 
