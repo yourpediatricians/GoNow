@@ -193,9 +193,21 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
   }, [rideId]);
 
   const handleCancel = async () => {
+    let title = 'Cancel Ride';
+    let message = 'Are you sure you want to cancel this ride?';
+
+    if (rideDetails && rideDetails.acceptedAt) {
+      const acceptedTime = new Date(rideDetails.acceptedAt).getTime();
+      const elapsedMinutes = (Date.now() - acceptedTime) / 60000;
+      if (elapsedMinutes > 3) {
+        title = 'Cancellation Fee Warning';
+        message = 'Cancelling this ride after 3 minutes of captain assignment will incur a 30% cancellation fee. Do you want to proceed?';
+      }
+    }
+
     Alert.alert(
-      'Cancel Ride',
-      'Are you sure you want to cancel this ride?',
+      title,
+      message,
       [
         { text: 'No', style: 'cancel' },
         {

@@ -101,6 +101,7 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
   const [estimatedDistance, setEstimatedDistance] = useState<number | null>(null);
   const [isFareLoading, setIsFareLoading] = useState(false);
+  const [cancellationFee, setCancellationFee] = useState<number>(0);
 
   useEffect(() => {
     const fetchFareEstimate = async () => {
@@ -115,6 +116,7 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
         if (res.success && res.data) {
           setEstimatedFare(res.data.fare);
           setEstimatedDistance(res.data.distance);
+          setCancellationFee(res.data.cancellationFee || 0);
         }
       } catch (err) {
         console.warn('Failed to fetch economy fare estimate:', err);
@@ -303,6 +305,13 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
 
       {/* Booking Button */}
       <View style={s.footer}>
+        {cancellationFee > 0 && (
+          <View style={s.cancellationWarning}>
+            <Text style={s.cancellationWarningText}>
+              ⚠️ Includes ₹{cancellationFee} outstanding cancellation fee
+            </Text>
+          </View>
+        )}
         <TouchableOpacity
           style={s.bookingBtn}
           onPress={handleBooking}
@@ -434,5 +443,19 @@ const s = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  cancellationWarning: {
+    backgroundColor: 'rgba(248, 177, 0, 0.1)',
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(248, 177, 0, 0.3)',
+  },
+  cancellationWarningText: {
+    color: '#F8B100',
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
   },
 });

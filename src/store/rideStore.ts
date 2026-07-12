@@ -17,6 +17,7 @@ interface RideState {
   estimatedFares: Record<string, number>;
   estimatedDurations: Record<string, number>;
   availableCaptainsMap: Record<string, number>;
+  cancellationFee: number;
 
   // Active ride
   rideStatus: RideStatus;
@@ -66,6 +67,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   estimatedFares: {},
   estimatedDurations: {},
   availableCaptainsMap: {},
+  cancellationFee: 0,
   rideStatus: 'idle',
   activeRide: null,
   activeRideId: null,
@@ -108,6 +110,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       estimatedFares: {},
       estimatedDurations: {},
       availableCaptainsMap: {},
+      cancellationFee: 0,
       rideStatus: 'idle',
       activeRide: null,
       activeRideId: null,
@@ -153,6 +156,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         }
       });
 
+      const cancellationFee = results[0]?.data?.cancellationFee || 0;
       const currentSelected = get().selectedRideType || 'bike';
 
       set({
@@ -161,6 +165,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         availableCaptainsMap: captainsObj,
         estimatedDistance: distance,
         isSurge: surge,
+        cancellationFee,
         // Keep active selection in sync for backward compatibility
         estimatedFare: faresObj[currentSelected] || 0,
         estimatedDuration: durationsObj[currentSelected] || 0,

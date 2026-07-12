@@ -59,7 +59,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     pickup, dropoff, setPickup, setDropoff, setSelectedRideType, setPaymentMethod,
     fetchEstimate, requestRide,
     estimatedFare, estimatedDistance, estimatedDuration, isSurge, availableCaptains,
-    estimatedFares, estimatedDurations, availableCaptainsMap,
+    estimatedFares, estimatedDurations, availableCaptainsMap, cancellationFee,
     isLoading,
     error,
   } = useRideStore();
@@ -274,6 +274,14 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
           ))}
         </View>
 
+        {cancellationFee > 0 && (
+          <View style={styles.cancellationWarning}>
+            <Text style={styles.cancellationWarningText}>
+              ⚠️ Includes ₹{cancellationFee} outstanding cancellation fee
+            </Text>
+          </View>
+        )}
+
         {/* Book CTA */}
         <TouchableOpacity
           style={styles.bookBtn}
@@ -390,6 +398,20 @@ const styles = StyleSheet.create({
   bookBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
   bookBtnArrow: { fontSize: FontSize.lg, color: Colors.white },
   editArrow: { fontSize: FontSize.xs, color: Colors.textMuted, marginLeft: Spacing.sm },
+  cancellationWarning: {
+    backgroundColor: 'rgba(248, 177, 0, 0.1)',
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(248, 177, 0, 0.3)',
+  },
+  cancellationWarningText: {
+    color: '#F8B100',
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+  },
   pickupPin: {
     width: 20, height: 20, borderRadius: 10,
     backgroundColor: 'rgba(255,90,31,0.3)',
