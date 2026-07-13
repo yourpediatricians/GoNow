@@ -102,6 +102,8 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
   const [estimatedDistance, setEstimatedDistance] = useState<number | null>(null);
   const [isFareLoading, setIsFareLoading] = useState(false);
   const [cancellationFee, setCancellationFee] = useState<number>(0);
+  const [snappedPickup, setSnappedPickup] = useState<string | null>(null);
+  const [snappedDropoff, setSnappedDropoff] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchFareEstimate = async () => {
@@ -117,6 +119,8 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
           setEstimatedFare(res.data.fare);
           setEstimatedDistance(res.data.distance);
           setCancellationFee(res.data.cancellationFee || 0);
+          setSnappedPickup(res.data.snappedPickupStop || null);
+          setSnappedDropoff(res.data.snappedDropoffStop || null);
         }
       } catch (err) {
         console.warn('Failed to fetch economy fare estimate:', err);
@@ -263,6 +267,28 @@ export const EconomyBookingScreen: React.FC<Props> = ({ navigation, route }) => 
             </View>
           </View>
         </View>
+
+        {/* Snapped Shuttle Stops Banner */}
+        {(snappedPickup || snappedDropoff) && (
+          <View style={[s.card, { backgroundColor: 'rgba(255,199,44,0.06)', borderColor: 'rgba(255,199,44,0.2)' }]}>
+            <Text style={[s.cardLabel, { color: Colors.primary }]}>🚶 E-Rickshaw Route Stops</Text>
+            <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.sm }}>
+              Your ride is automatically snapped to these fixed shuttle points.
+            </Text>
+            <View style={{ gap: Spacing.xs }}>
+              {snappedPickup && (
+                <Text style={{ fontSize: FontSize.sm, color: Colors.textPrimary }}>
+                  🚶 Walk to: <Text style={{ fontWeight: FontWeight.bold, color: Colors.primary }}>{snappedPickup}</Text>
+                </Text>
+              )}
+              {snappedDropoff && (
+                <Text style={{ fontSize: FontSize.sm, color: Colors.textPrimary, marginTop: 4 }}>
+                  🚏 Drop off near: <Text style={{ fontWeight: FontWeight.bold, color: Colors.primary }}>{snappedDropoff}</Text>
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Saved Addresses Card */}
         <View style={s.card}>

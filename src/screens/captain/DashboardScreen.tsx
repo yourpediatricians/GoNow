@@ -55,6 +55,13 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [selectedHistoryRide, setSelectedHistoryRide] = useState<any | null>(null);
   const [captainLocation, setCaptainLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
+  // E-Rickshaw Route Selection States
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [selectedRouteId, setSelectedRouteId] = useState<string>('');
+  const [selectedDirection, setSelectedDirection] = useState<'forward' | 'reverse'>('forward');
+  const [pendingCoords, setPendingCoords] = useState<{latitude: number; longitude: number} | null>(null);
+
   const formatIncomingPoolRequest = async (payload: any) => {
     if (!payload || !payload.poolId) return payload;
     try {
@@ -431,7 +438,9 @@ export const CaptainDashboardScreen: React.FC = () => {
 
   const handleToggleOnline = useCallback(async () => {
     if (isOnline) {
-      toggleOnline(false).catch(err =>
+      toggleOnline(false).then(() => {
+        captainService.setActiveRoute(null).catch(() => {});
+      }).catch(err =>
         Alert.alert('Error', err?.response?.data?.message || 'Failed to go offline')
       );
       return;
@@ -483,11 +492,29 @@ export const CaptainDashboardScreen: React.FC = () => {
         });
       }
 
-      toggleOnline(true, coords.latitude, coords.longitude).then(() => {
-        fetchActiveInvitation();
-      }).catch(err =>
-        Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
-      );
+      if (user?.vehicle?.type === 'economy') {
+        try {
+          const res = await captainService.getRoutes();
+          if (res.success && res.data) {
+            setRoutes(res.data);
+            if (res.data.length > 0) {
+              setSelectedRouteId(res.data[0]._id);
+            }
+            setPendingCoords(coords);
+            setShowRouteModal(true);
+          } else {
+            Alert.alert('Error', 'No configured e-rickshaw routes found.');
+          }
+        } catch (err: any) {
+          Alert.alert('Error', err?.response?.data?.message || 'Failed to fetch routes.');
+        }
+      } else {
+        toggleOnline(true, coords.latitude, coords.longitude).then(() => {
+          fetchActiveInvitation();
+        }).catch(err =>
+          Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
+        );
+      }
     } catch (err) {
       console.warn('Geolocation failed both attempts:', err);
       Alert.alert(
@@ -496,7 +523,24 @@ export const CaptainDashboardScreen: React.FC = () => {
         [{ text: 'OK' }]
       );
     }
-  }, [isOnline]);
+  }, [isOnline, user]);
+
+  const handleConfirmRoute = async () => {
+    if (!selectedRouteId) {
+      Alert.alert('Selection Required', 'Please select a route to continue.');
+      return;
+    }
+    try {
+      await captainService.setActiveRoute(selectedRouteId, selectedDirection);
+      if (pendingCoords) {
+        await toggleOnline(true, pendingCoords.latitude, pendingCoords.longitude);
+        await fetchActiveInvitation();
+      }
+      setShowRouteModal(false);
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to configure route');
+    }
+  };
 
 
   const handleVerifyOtp = async () => {
@@ -750,6 +794,87 @@ export const CaptainDashboardScreen: React.FC = () => {
     } finally {
       setIsRideActionLoading(false);
     }
+  };
+
+  const renderRouteSelectionModal = () => {
+    return (
+      <Modal
+        visible={showRouteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowRouteModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Active Route</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowRouteModal(false)}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: Spacing.md }}>
+              <Text style={styles.modalSubLabel}>Choose Route</Text>
+              <View style={styles.routeOptionsList}>
+                {routes.map((r) => (
+                  <TouchableOpacity
+                    key={r._id}
+                    style={[
+                      styles.routeOptionBtn,
+                      selectedRouteId === r._id && styles.routeOptionBtnActive
+                    ]}
+                    onPress={() => setSelectedRouteId(r._id)}>
+                    <Text style={[
+                      styles.routeOptionBtnTxt,
+                      selectedRouteId === r._id && styles.routeOptionBtnTxtActive
+                    ]}>
+                      {r.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.modalSubLabel, { marginTop: Spacing.lg }]}>Direction</Text>
+              <View style={styles.directionToggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.directionToggleBtn,
+                    selectedDirection === 'forward' && styles.directionToggleBtnActive
+                  ]}
+                  onPress={() => setSelectedDirection('forward')}>
+                  <Text style={[
+                    styles.directionToggleBtnTxt,
+                    selectedDirection === 'forward' && styles.directionToggleBtnTxtActive
+                  ]}>
+                    Forward (Go)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.directionToggleBtn,
+                    selectedDirection === 'reverse' && styles.directionToggleBtnActive
+                  ]}
+                  onPress={() => setSelectedDirection('reverse')}>
+                  <Text style={[
+                    styles.directionToggleBtnTxt,
+                    selectedDirection === 'reverse' && styles.directionToggleBtnTxtActive
+                  ]}>
+                    Reverse (Return)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.confirmRouteBtn}
+                onPress={handleConfirmRoute}>
+                <Text style={styles.confirmRouteBtnTxt}>Confirm & Go Online</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   const renderIncomingPoolRequestModal = () => {
@@ -1250,6 +1375,9 @@ export const CaptainDashboardScreen: React.FC = () => {
 
       {/* Dynamic co-rider request overlay */}
       {pendingRiderRequest && renderPendingRiderRequestModal()}
+
+      {/* E-Rickshaw Route Selection Modal */}
+      {showRouteModal && renderRouteSelectionModal()}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -2051,5 +2179,72 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Spacing.md,
+  },
+  modalSubLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semiBold,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  routeOptionsList: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  routeOptionBtn: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surface,
+  },
+  routeOptionBtnActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(255,199,44,0.1)',
+  },
+  routeOptionBtnTxt: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+  },
+  routeOptionBtnTxtActive: {
+    color: Colors.primary,
+    fontWeight: FontWeight.semiBold,
+  },
+  directionToggleContainer: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  directionToggleBtn: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+  },
+  directionToggleBtnActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(255,199,44,0.1)',
+  },
+  directionToggleBtnTxt: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+  },
+  directionToggleBtnTxtActive: {
+    color: Colors.primary,
+    fontWeight: FontWeight.semiBold,
+  },
+  confirmRouteBtn: {
+    backgroundColor: Colors.primary,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  confirmRouteBtnTxt: {
+    color: '#1A0800',
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
   },
 });

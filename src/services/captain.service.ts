@@ -66,4 +66,20 @@ export const captainService = {
     const { data } = await api.get('/captain/active-invitation');
     return data;
   },
+
+  /**
+   * Fetch all e-rickshaw routes.
+   */
+  getRoutes: async () => {
+    const { data } = await api.get('/routes');
+    return data;
+  },
+
+  /**
+   * Set active route and direction for e-rickshaw.
+   */
+  setActiveRoute: async (routeId: string | null, direction?: 'forward' | 'reverse') => {
+    const { data } = await api.post('/routes/set-active', { routeId, direction });
+    return data;
+  },
 };
