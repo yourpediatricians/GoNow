@@ -21,6 +21,7 @@ interface DummyMapProps {
   dropoffLocation?: { coordinates: [number, number]; address: string } | null;
   rideType?: string;
   rideStatus?: 'arriving' | 'in_progress' | 'completed';
+  shuttleRouteStops?: any[];
 }
 
 const DARK_MAP_STYLE = [
@@ -81,11 +82,21 @@ export const DummyMap: React.FC<DummyMapProps> = ({
   dropoffLocation,
   rideType,
   rideStatus,
+  shuttleRouteStops,
 }) => {
   const mapRef = useRef<MapView>(null);
   const [routeCoordinates, setRouteCoordinates] = React.useState<{ latitude: number; longitude: number }[]>([]);
 
   useEffect(() => {
+    if (rideType === 'economy' && shuttleRouteStops && shuttleRouteStops.length > 0) {
+      const points = shuttleRouteStops.map(stop => ({
+        latitude: stop.location.coordinates[1],
+        longitude: stop.location.coordinates[0],
+      }));
+      setRouteCoordinates(points);
+      return;
+    }
+
     const fetchRoute = async () => {
       let origin = '';
       let destination = '';
@@ -243,6 +254,29 @@ export const DummyMap: React.FC<DummyMapProps> = ({
         customMapStyle={DARK_MAP_STYLE}
         initialRegion={initialRegion}
       >
+        {rideType === 'economy' && shuttleRouteStops && shuttleRouteStops.map((stop, idx) => {
+          const lat = stop.location?.coordinates?.[1];
+          const lng = stop.location?.coordinates?.[0];
+          if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+
+          const isPickup = pickupLocation?.coordinates && Math.abs(pickupLocation.coordinates[1] - lat) < 0.0001 && Math.abs(pickupLocation.coordinates[0] - lng) < 0.0001;
+          const isDropoff = dropoffLocation?.coordinates && Math.abs(dropoffLocation.coordinates[1] - lat) < 0.0001 && Math.abs(dropoffLocation.coordinates[0] - lng) < 0.0001;
+          if (isPickup || isDropoff) return null;
+
+          return (
+            <Marker
+              key={stop._id || idx}
+              coordinate={{ latitude: lat, longitude: lng }}
+              title={stop.name}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.shuttleStopMarker}>
+                <View style={styles.shuttleStopInner} />
+              </View>
+            </Marker>
+          );
+        })}
+
         {!pickupLocation?.coordinates && latitude && longitude && !isNaN(latitude) && !isNaN(longitude) && (
           <Marker
             coordinate={{ latitude, longitude }}
@@ -385,5 +419,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 3,
     elevation: 4,
+  },
+  shuttleStopMarker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 90, 31, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FF5A1F',
+  },
+  shuttleStopInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF5A1F',
   },
 });

@@ -7,6 +7,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RiderStackParamList } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { rideService } from '../../services/ride.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RideComplete'>;
 const { width } = Dimensions.get('window');
@@ -15,6 +16,7 @@ export const RideCompleteScreen: React.FC<Props> = ({ navigation, route }) => {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [tipSelected, setTipSelected] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const checkScale = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -28,7 +30,17 @@ export const RideCompleteScreen: React.FC<Props> = ({ navigation, route }) => {
     ]).start();
   }, []);
 
-  const handleDone = () => {
+  const handleDone = async () => {
+    if (rating > 0 && !isSubmitting) {
+      setIsSubmitting(true);
+      try {
+        await rideService.rateRide(ride._id, rating, '', tipSelected || 0);
+      } catch (err) {
+        console.warn('Failed to submit ride rating:', err);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
     navigation.reset({ index: 0, routes: [{ name: 'RiderTabs' }] });
   };
 
@@ -127,12 +139,18 @@ export const RideCompleteScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
 
           {/* Done button */}
-          <TouchableOpacity style={s.doneBtn} onPress={handleDone} activeOpacity={0.9}>
+          <TouchableOpacity 
+            style={[s.doneBtn, isSubmitting && { opacity: 0.6 }]} 
+            onPress={handleDone} 
+            disabled={isSubmitting}
+            activeOpacity={0.9}>
             <LinearGradient
               colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={s.doneBtnGrad}>
-              <Text style={s.doneBtnText}>Done · Back to Home</Text>
+              <Text style={s.doneBtnText}>
+                {isSubmitting ? 'Submitting Rating...' : 'Done · Back to Home'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
           <View style={{ height: 40 }} />

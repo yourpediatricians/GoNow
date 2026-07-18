@@ -61,6 +61,36 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [selectedDirection, setSelectedDirection] = useState<'forward' | 'reverse'>('forward');
   const [pendingCoords, setPendingCoords] = useState<{latitude: number; longitude: number} | null>(null);
+  const [activeRouteName, setActiveRouteName] = useState<string>('');
+  const [activeRouteDirection, setActiveRouteDirection] = useState<'forward' | 'reverse' | null>(null);
+  const [activeRouteStops, setActiveRouteStops] = useState<any[]>([]);
+
+  const fetchCaptainRouteInfo = async () => {
+    try {
+      const res = await captainService.getProfile();
+      if (res.success && res.data?.captainProfile) {
+        const cp = res.data.captainProfile;
+        if (cp.activeRouteId) {
+          setActiveRouteName(cp.activeRouteId.name || '');
+          setActiveRouteDirection(cp.routeDirection || null);
+          setActiveRouteStops(cp.activeRouteId.stops || []);
+          setSelectedRouteId(cp.activeRouteId._id || cp.activeRouteId);
+          setSelectedDirection(cp.routeDirection || 'forward');
+        } else {
+          setActiveRouteName('');
+          setActiveRouteDirection(null);
+          setActiveRouteStops([]);
+        }
+
+        // Synchronize driver user profile details in the authStore to update ratings
+        if (res.data.user) {
+          useAuthStore.getState().setUser(res.data.user);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch captain route info:', err);
+    }
+  };
 
   const formatIncomingPoolRequest = async (payload: any) => {
     if (!payload || !payload.poolId) return payload;
@@ -218,6 +248,7 @@ export const CaptainDashboardScreen: React.FC = () => {
     fetchActivePool();
     fetchActiveInvitation();
     fetchRecentRides();
+    fetchCaptainRouteInfo();
   }, []);
 
   // Fetch active ride details when activeRideId changes
@@ -292,6 +323,11 @@ export const CaptainDashboardScreen: React.FC = () => {
       });
     };
 
+    const directionReversedHandler = (data: any) => {
+      Alert.alert('Route Direction Reversed', data.message || `You are now heading in the ${data.direction} direction.`);
+      fetchCaptainRouteInfo();
+    };
+
     const initSocketConnection = async () => {
       try {
         const sock = isOnline ? await connectSocket() : getSocket();
@@ -319,6 +355,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         sock.on('pool:updated', poolUpdatedHandler);
         sock.on('pool:add_rider_request', addRiderReqHandler);
         sock.on('pool:add_rider_cancelled', addRiderCancelledHandler);
+        sock.on('route:direction_reversed', directionReversedHandler);
       } catch (err) {
         console.warn('Socket listener init failed:', err);
       }
@@ -338,6 +375,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         socketInstance.off('pool:updated', poolUpdatedHandler);
         socketInstance.off('pool:add_rider_request', addRiderReqHandler);
         socketInstance.off('pool:add_rider_cancelled', addRiderCancelledHandler);
+        socketInstance.off('route:direction_reversed', directionReversedHandler);
       }
     };
   }, [isOnline, activeRideId, activePoolId]);
@@ -1031,6 +1069,7 @@ export const CaptainDashboardScreen: React.FC = () => {
           dropoffLocation={poolDropoff}
           rideType="economy"
           rideStatus={isMatched ? 'arriving' : 'in_progress'}
+          shuttleRouteStops={activeRouteStops}
         />
         <View style={styles.activeSheet}>
           <LinearGradient colors={['#1A0800', '#0D0D0D']} style={styles.activeSheetHeader}>
@@ -1234,6 +1273,7 @@ export const CaptainDashboardScreen: React.FC = () => {
           dropoffLocation={activeRideDetails.dropoff}
           rideType={activeRideDetails.rideType}
           rideStatus={isArriving ? 'arriving' : 'in_progress'}
+          shuttleRouteStops={activeRouteStops}
         />
         <View style={styles.activeSheet}>
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.activeSheetHeader}>
@@ -1412,6 +1452,44 @@ export const CaptainDashboardScreen: React.FC = () => {
             </Text>
           </View>
         </LinearGradient>
+
+        {/* E-Rickshaw Active Route Dashboard Display */}
+        {isOnline && user?.vehicle?.type === 'economy' && (
+          <View style={styles.activeRouteCardDashboard}>
+            <View style={styles.activeRouteHeaderRow}>
+              <Text style={styles.activeRouteTitle}>🛺 Active Shuttle Route</Text>
+              <TouchableOpacity
+                style={styles.changeRouteDashboardBtn}
+                onPress={async () => {
+                  try {
+                    const res = await captainService.getRoutes();
+                    if (res.success && res.data) {
+                      setRoutes(res.data);
+                      setShowRouteModal(true);
+                    }
+                  } catch (err: any) {
+                    Alert.alert('Error', err?.response?.data?.message || 'Failed to fetch routes.');
+                  }
+                }}>
+                <Text style={styles.changeRouteDashboardBtnText}>Change Route</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.activeRouteNameText}>{activeRouteName || 'None Selected'}</Text>
+            <View style={styles.activeRouteBadgeRow}>
+              <View style={[
+                styles.activeRouteDirectionBadge,
+                !activeRouteDirection && { backgroundColor: Colors.surfaceBorder, borderColor: Colors.surfaceBorder }
+              ]}>
+                <Text style={[
+                  styles.activeRouteDirectionBadgeText,
+                  !activeRouteDirection && { color: Colors.textMuted }
+                ]}>
+                  Direction: {activeRouteDirection === 'forward' ? 'Forward (Go) ➔' : activeRouteDirection === 'reverse' ? 'Reverse (Return) ↩' : 'None Selected'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Today's Stats */}
         <View style={styles.statsSection}>
@@ -2246,5 +2324,64 @@ const styles = StyleSheet.create({
     color: '#1A0800',
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
+  },
+  activeRouteCardDashboard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginHorizontal: Spacing.xl,
+    marginTop: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    ...Shadow.sm,
+  },
+  activeRouteHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  activeRouteTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  changeRouteDashboardBtn: {
+    backgroundColor: 'rgba(255,199,44,0.1)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  changeRouteDashboardBtnText: {
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+  },
+  activeRouteNameText: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    marginTop: 2,
+  },
+  activeRouteBadgeRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.md,
+  },
+  activeRouteDirectionBadge: {
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  activeRouteDirectionBadgeText: {
+    fontSize: 12,
+    fontWeight: FontWeight.medium,
+    color: Colors.success,
   },
 });
