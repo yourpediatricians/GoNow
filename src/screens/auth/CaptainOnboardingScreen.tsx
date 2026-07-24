@@ -382,7 +382,7 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
       </View>
       <TouchableOpacity style={s.goLiveBtn} onPress={handleGoLive} activeOpacity={0.9}>
         <LinearGradient colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.nextBtnGrad}>
-          <Text style={s.nextBtnText}>🏍️  Go to Captain Dashboard</Text>
+          <Text style={s.nextBtnText}>Go to Captain Dashboard</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>

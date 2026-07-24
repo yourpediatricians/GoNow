@@ -44,8 +44,8 @@ export const CaptainEarningsScreen: React.FC = () => {
   const stats = period === 'today'
     ? { total: todayEarnings, rides: todayRides, hours: '-', avg: todayRides > 0 ? Math.round(todayEarnings / todayRides) : 0 }
     : period === 'week'
-    ? { total: weeklyEarnings.reduce((s, d) => s + d.amount, 0), rides: weeklyEarnings.reduce((s, d) => s + d.rides, 0), hours: '-', avg: 0 }
-    : { total: totalEarnings, rides: 0, hours: '-', avg: 0 };
+    ? { total: weeklyEarnings.reduce((s, d) => s + d.amount, 0), rides: weeklyEarnings.reduce((s, d) => s + d.rides, 0), hours: '-', avg: weeklyEarnings.reduce((s, d) => s + d.rides, 0) > 0 ? Math.round(weeklyEarnings.reduce((s, d) => s + d.amount, 0) / weeklyEarnings.reduce((s, d) => s + d.rides, 0)) : 0 }
+    : { total: totalEarnings, rides: completedRides, hours: '-', avg: completedRides > 0 ? Math.round(totalEarnings / completedRides) : 0 };
 
 
   return (

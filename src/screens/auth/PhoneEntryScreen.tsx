@@ -55,7 +55,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  const roleLabel = role === 'rider' ? '🚗 Rider' : '🏍️ Captain';
+  const roleLabel = role === 'rider' ? 'Rider' : 'Captain';
 
   return (
     <KeyboardAvoidingView

@@ -15,14 +15,14 @@ import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../
 
 const MENU_ITEMS = [
   { section: 'Account', items: [
-    { icon: '👤', label: 'Edit Profile', route: 'EditProfile', arrow: true },
-    { icon: '📍', label: 'Saved Addresses', route: 'SavedAddresses', arrow: true },
+    { label: 'Edit Profile', route: 'EditProfile', arrow: true },
+    { label: 'Saved Addresses', route: 'SavedAddresses', arrow: true },
   ]},
   { section: 'Support', items: [
-    { icon: '🆘', label: 'Safety', route: 'Support', params: { activeTab: 'safety' }, arrow: true },
-    { icon: '💬', label: 'Help & Support', route: 'Support', params: { activeTab: 'help' }, arrow: true },
-    { icon: '⭐', label: 'Rate the App', route: 'Support', params: { activeTab: 'rate' }, arrow: true },
-    { icon: '📋', label: 'Terms & Privacy', route: 'Support', params: { activeTab: 'terms' }, arrow: true },
+    { label: 'Safety', route: 'Support', params: { activeTab: 'safety' }, arrow: true },
+    { label: 'Help & Support', route: 'Support', params: { activeTab: 'help' }, arrow: true },
+    { label: 'Rate the App', route: 'Support', params: { activeTab: 'rate' }, arrow: true },
+    { label: 'Terms & Privacy', route: 'Support', params: { activeTab: 'terms' }, arrow: true },
   ]},
 ];
 
@@ -75,7 +75,7 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.badgeRow}>
               <View style={styles.roleBadge}>
                 <Text style={styles.roleBadgeText}>
-                  {user?.role === 'rider' ? '🚗 Rider' : '🏍️ Captain'}
+                  {user?.role === 'rider' ? 'Rider' : 'Captain'}
                 </Text>
               </View>
               <View style={styles.verifiedBadge}>
@@ -116,7 +116,6 @@ export const ProfileScreen: React.FC = () => {
                     styles.menuItem,
                     ii < section.items.length - 1 && styles.menuItemBorder,
                   ]}>
-                  <Text style={styles.menuItemIcon}>{item.icon}</Text>
                   <Text style={styles.menuItemLabel}>{item.label}</Text>
                   <View style={styles.menuItemRight}>
                     {(item as any).value && (
@@ -135,7 +134,7 @@ export const ProfileScreen: React.FC = () => {
         {/* Logout */}
         <View style={styles.logoutSection}>
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-            <Text style={styles.logoutText}>🚪 Sign Out</Text>
+            <Text style={styles.logoutText}>Sign Out</Text>
           </TouchableOpacity>
           <Text style={styles.version}>GoNow v1.0.0</Text>
         </View>
@@ -241,12 +240,12 @@ const styles = StyleSheet.create({
   logoutSection: { alignItems: 'center', gap: Spacing.md },
   logoutBtn: {
     width: '90%',
-    backgroundColor: 'rgba(239,68,68,0.08)',
+    backgroundColor: '#EF4444',
     borderRadius: BorderRadius.lg,
     padding: Spacing.base,
     alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)',
+    borderWidth: 1, borderColor: '#EF4444',
   },
-  logoutText: { color: Colors.error, fontWeight: FontWeight.semiBold, fontSize: FontSize.base },
+  logoutText: { color: '#FFFFFF', fontWeight: FontWeight.bold, fontSize: FontSize.base },
   version: { fontSize: FontSize.xs, color: Colors.textMuted },
 });

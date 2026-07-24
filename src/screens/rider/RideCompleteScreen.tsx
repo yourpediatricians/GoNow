@@ -124,7 +124,7 @@ export const RideCompleteScreen: React.FC<Props> = ({ navigation, route }) => {
 
           {/* Tip */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Add a Tip 🙏</Text>
+            <Text style={s.cardTitle}>Add a Tip</Text>
             <Text style={s.tipSub}>Show your appreciation to your captain</Text>
             <View style={s.tipsRow}>
               {TIPS.map(t => (

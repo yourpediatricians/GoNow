@@ -69,7 +69,17 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
         Animated.spring(successScale, { toValue: 1, tension: 60, friction: 7, useNativeDriver: true }).start();
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.';
+      let msg = err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.';
+      // Clean up Firebase native error bracket prefixes
+      if (msg.includes('auth/invalid-verification-code') || msg.includes('invalid-code')) {
+        msg = 'The verification code you entered is incorrect. Please try again.';
+      } else if (msg.includes('auth/session-expired') || msg.includes('session-expired')) {
+        msg = 'The verification code has expired. Please request a new one.';
+      } else if (msg.includes('auth/too-many-requests') || msg.includes('quota-exceeded')) {
+        msg = 'Too many attempts. Please try again later.';
+      } else if (msg.includes('[') && msg.includes(']')) {
+        msg = msg.replace(/\[.*?\]\s*/g, '');
+      }
       setError(msg);
       shake();
       setOtp('');
@@ -154,7 +164,7 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.onboardBtnGrad}>
-              <Text style={styles.onboardBtnText}>🚀  Start Onboard</Text>
+              <Text style={styles.onboardBtnText}>Start Onboard</Text>
             </LinearGradient>
           </TouchableOpacity>
           <Text style={styles.onboardNote}>Takes about 5 minutes to complete</Text>

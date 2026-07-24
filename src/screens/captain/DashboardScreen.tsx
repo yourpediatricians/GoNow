@@ -13,10 +13,13 @@ import {
   PermissionsAndroid,
   Platform,
   Modal,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useCaptainStore } from '../../store/captainStore';
 import { useAuthStore } from '../../store/authStore';
+import { useNavigation } from '@react-navigation/native';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { getSocket, connectSocket, SOCKET_EVENTS, emitLocationUpdate } from '../../services/socket.service';
 import Geolocation from '@react-native-community/geolocation';
@@ -27,9 +30,20 @@ import { poolService } from '../../services/pool.service';
 import { captainService } from '../../services/captain.service';
 import { DummyMap } from '../../components/DummyMap';
 
+const WEEKLY_DATA = [
+  { day: 'Mon', amount: 820, rides: 8 },
+  { day: 'Tue', amount: 1120, rides: 11 },
+  { day: 'Wed', amount: 640, rides: 6 },
+  { day: 'Thu', amount: 1380, rides: 13 },
+  { day: 'Fri', amount: 1750, rides: 17 },
+  { day: 'Sat', amount: 2100, rides: 20 },
+  { day: 'Sun', amount: 960, rides: 9 },
+];
+
 const { width } = Dimensions.get('window');
 
 export const CaptainDashboardScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const {
     isOnline, toggleOnline, fetchEarnings,
     todayEarnings, todayRides, weeklyEarnings,
@@ -42,6 +56,8 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [activeRideDetails, setActiveRideDetails] = useState<any>(null);
   const [otpCode, setOtpCode] = useState('');
   const [isRideActionLoading, setIsRideActionLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isTogglingOnline, setIsTogglingOnline] = useState(false);
 
   // E-Rickshaw Pool Local States
   const [incomingPoolRequest, setIncomingPoolRequest] = useState<any>(null);
@@ -54,6 +70,13 @@ export const CaptainDashboardScreen: React.FC = () => {
   const [recentRides, setRecentRides] = useState<any[]>([]);
   const [selectedHistoryRide, setSelectedHistoryRide] = useState<any | null>(null);
   const [captainLocation, setCaptainLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Trip History Modal States
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyRides, setHistoryRides] = useState<any[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
 
   // E-Rickshaw Route Selection States
   const [showRouteModal, setShowRouteModal] = useState(false);
@@ -109,9 +132,14 @@ export const CaptainDashboardScreen: React.FC = () => {
     return payload;
   };
 
-  const maxEarning = weeklyEarnings.length
-    ? Math.max(...weeklyEarnings.map(d => d.amount), 1)
-    : 1;
+  const chartData = (weeklyEarnings && weeklyEarnings.length > 0 ? weeklyEarnings : WEEKLY_DATA)
+    .map(d => ({
+      day: (d as any).day ?? (d as any).date ?? '',
+      amount: d.amount,
+      rides: d.rides,
+    }));
+
+  const maxEarning = Math.max(...chartData.map(d => d.amount), 1);
 
   // Fetch active ride details
   const fetchActiveRide = async () => {
@@ -210,6 +238,46 @@ export const CaptainDashboardScreen: React.FC = () => {
     }
   };
 
+  const fetchHistoryRides = async (page: number, shouldAppend = false) => {
+    if (isHistoryLoading) return;
+    setIsHistoryLoading(true);
+    try {
+      const res = await captainService.getRideHistory(page, 15);
+      if (res.success && res.data) {
+        const list = res.data.rides || res.data.history || res.data;
+        const ridesList = Array.isArray(list) ? list : (list && Array.isArray(list.rides) ? list.rides : []);
+        
+        if (ridesList.length < 15) {
+          setHasMoreHistory(false);
+        } else {
+          setHasMoreHistory(true);
+        }
+
+        if (shouldAppend) {
+          setHistoryRides(prev => [...prev, ...ridesList]);
+        } else {
+          setHistoryRides(ridesList);
+        }
+        setHistoryPage(page);
+      }
+    } catch (err) {
+      console.warn('Error fetching history rides:', err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const handleOpenHistory = () => {
+    setShowHistoryModal(true);
+    fetchHistoryRides(1, false);
+  };
+
+  const handleLoadMoreHistory = () => {
+    if (hasMoreHistory && !isHistoryLoading) {
+      fetchHistoryRides(historyPage + 1, true);
+    }
+  };
+
   const getRideTypeEmoji = (type: string) => {
     switch (type) {
       case 'bike': return '🏍️';
@@ -244,11 +312,22 @@ export const CaptainDashboardScreen: React.FC = () => {
 
   // Fetch earnings, active pool, and active invitations on mount
   useEffect(() => {
-    fetchEarnings();
-    fetchActivePool();
-    fetchActiveInvitation();
-    fetchRecentRides();
-    fetchCaptainRouteInfo();
+    const initLoad = async () => {
+      try {
+        await Promise.all([
+          fetchEarnings(),
+          fetchActivePool(),
+          fetchActiveInvitation(),
+          fetchRecentRides(),
+          fetchCaptainRouteInfo(),
+        ]);
+      } catch (err) {
+        console.warn('Initial load failed:', err);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+    initLoad();
   }, []);
 
   // Fetch active ride details when activeRideId changes
@@ -475,29 +554,36 @@ export const CaptainDashboardScreen: React.FC = () => {
   };
 
   const handleToggleOnline = useCallback(async () => {
+    setIsTogglingOnline(true);
     if (isOnline) {
-      toggleOnline(false).then(() => {
-        captainService.setActiveRoute(null).catch(() => {});
-      }).catch(err =>
-        Alert.alert('Error', err?.response?.data?.message || 'Failed to go offline')
-      );
+      try {
+        await toggleOnline(false);
+        await captainService.setActiveRoute(null).catch(() => {});
+      } catch (err: any) {
+        Alert.alert('Error', err?.response?.data?.message || 'Failed to go offline');
+      } finally {
+        setIsTogglingOnline(false);
+      }
       return;
     }
 
-    const hasPermission = await requestLocationPermission();
-    if (!hasPermission) return;
-
-    // Helper: wraps getCurrentPosition in a Promise
-    const getPosition = (highAccuracy: boolean, timeoutMs: number): Promise<{latitude: number; longitude: number}> =>
-      new Promise((resolve, reject) => {
-        Geolocation.getCurrentPosition(
-          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-          (err) => reject(err),
-          { enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge: 30000 }
-        );
-      });
-
     try {
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        setIsTogglingOnline(false);
+        return;
+      }
+
+      // Helper: wraps getCurrentPosition in a Promise
+      const getPosition = (highAccuracy: boolean, timeoutMs: number): Promise<{latitude: number; longitude: number}> =>
+        new Promise((resolve, reject) => {
+          Geolocation.getCurrentPosition(
+            (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+            (err) => reject(err),
+            { enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge: 30000 }
+          );
+        });
+
       let coords: {latitude: number; longitude: number};
 
       try {
@@ -540,25 +626,27 @@ export const CaptainDashboardScreen: React.FC = () => {
             }
             setPendingCoords(coords);
             setShowRouteModal(true);
+            // Keep isTogglingOnline as true because handleConfirmRoute or modal close will clear it
+            return;
           } else {
             Alert.alert('Error', 'No configured e-rickshaw routes found.');
+            setIsTogglingOnline(false);
           }
         } catch (err: any) {
           Alert.alert('Error', err?.response?.data?.message || 'Failed to fetch routes.');
+          setIsTogglingOnline(false);
         }
       } else {
-        toggleOnline(true, coords.latitude, coords.longitude).then(() => {
-          fetchActiveInvitation();
-        }).catch(err =>
-          Alert.alert('Error', err?.response?.data?.message || 'Failed to go online')
-        );
+        await toggleOnline(true, coords.latitude, coords.longitude);
+        await fetchActiveInvitation();
+        setIsTogglingOnline(false);
       }
-    } catch (err) {
-      console.warn('Geolocation failed both attempts:', err);
+    } catch (err: any) {
+      console.warn('Geolocation or activation failed:', err);
+      setIsTogglingOnline(false);
       Alert.alert(
-        'Location Unavailable',
-        'Could not get your location. Please make sure GPS or Wi-Fi is enabled and try again.',
-        [{ text: 'OK' }]
+        'Action Failed',
+        err?.response?.data?.message || 'Could not toggle online state. Please check your network and GPS and try again.'
       );
     }
   }, [isOnline, user]);
@@ -568,6 +656,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       Alert.alert('Selection Required', 'Please select a route to continue.');
       return;
     }
+    setIsTogglingOnline(true);
     try {
       await captainService.setActiveRoute(selectedRouteId, selectedDirection);
       if (pendingCoords) {
@@ -577,6 +666,8 @@ export const CaptainDashboardScreen: React.FC = () => {
       setShowRouteModal(false);
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message || 'Failed to configure route');
+    } finally {
+      setIsTogglingOnline(false);
     }
   };
 
@@ -840,14 +931,20 @@ export const CaptainDashboardScreen: React.FC = () => {
         visible={showRouteModal}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowRouteModal(false)}>
+        onRequestClose={() => {
+          setShowRouteModal(false);
+          setIsTogglingOnline(false);
+        }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '80%' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Active Route</Text>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={() => setShowRouteModal(false)}>
+                onPress={() => {
+                  setShowRouteModal(false);
+                  setIsTogglingOnline(false);
+                }}>
                 <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -921,7 +1018,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       <View style={styles.activeOverlay}>
         <View style={styles.activeSheet}>
           <LinearGradient colors={['#FFC72C', '#F8B100']} style={styles.activeSheetHeader}>
-            <Text style={[styles.activeSheetTitle, { color: '#1A0800' }]}>🛺 New Pool Assignment</Text>
+            <Text style={[styles.activeSheetTitle, { color: '#1A0800' }]}>New Pool Assignment</Text>
             <Text style={[styles.activeSheetSubtitle, { color: 'rgba(26,8,0,0.8)' }]}>
               {incomingPoolRequest.ridersCount} Passengers Ready for Booking
             </Text>
@@ -987,7 +1084,7 @@ export const CaptainDashboardScreen: React.FC = () => {
       <View style={styles.activeOverlay}>
         <View style={styles.activeSheet}>
           <LinearGradient colors={['#FF5A1F', '#FF7A45']} style={styles.activeSheetHeader}>
-            <Text style={styles.activeSheetTitle}>🛺 Co-Rider Request</Text>
+            <Text style={styles.activeSheetTitle}>Co-Rider Request</Text>
             <Text style={styles.activeSheetSubtitle}>
               A passenger wants to join your E-Rickshaw route!
             </Text>
@@ -1074,7 +1171,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         <View style={styles.activeSheet}>
           <LinearGradient colors={['#1A0800', '#0D0D0D']} style={styles.activeSheetHeader}>
             <Text style={styles.activeSheetTitle}>
-              {isMatched ? '🛺 Pool Assigned' : '🚀 Shared Trip in Progress'}
+              {isMatched ? 'Pool Assigned' : 'Shared Trip in Progress'}
             </Text>
             <Text style={styles.activeSheetSubtitle}>
               {isMatched ? 'Head to boarding pickup point' : 'Dropping off passengers sequence'}
@@ -1083,7 +1180,7 @@ export const CaptainDashboardScreen: React.FC = () => {
 
           <View style={styles.poolInfoCard}>
             <Text style={styles.poolInfoId}>Pool ID: P#{activePoolDetails._id?.slice(-4).toUpperCase()}</Text>
-            <Text style={styles.poolInfoSeats}>💺 {activePoolDetails.riders?.length} / 4 Seats</Text>
+            <Text style={styles.poolInfoSeats}>{activePoolDetails.riders?.length} / 4 Seats</Text>
           </View>
 
           <ScrollView style={styles.ridersList} contentContainerStyle={{ gap: Spacing.sm }}>
@@ -1103,13 +1200,13 @@ export const CaptainDashboardScreen: React.FC = () => {
                   </View>
                   <View style={styles.riderListInfo}>
                     <Text style={styles.riderListName}>{rider.user?.name || 'Rider'}</Text>
-                    <Text style={styles.riderListPickup} numberOfLines={1}>📍 {rider.pickup?.address}</Text>
-                    <Text style={styles.riderListDrop} numberOfLines={1}>🏁 {rider.dropoff?.address}</Text>
+                    <Text style={styles.riderListPickup} numberOfLines={1}>Pickup: {rider.pickup?.address}</Text>
+                    <Text style={styles.riderListDrop} numberOfLines={1}>Drop-off: {rider.dropoff?.address}</Text>
                   </View>
                   <View style={styles.riderListActions}>
                     {riderRide && isMatched && (
                       isOtpVerified ? (
-                        <Text style={styles.boardedText}>🟢 Boarded</Text>
+                        <Text style={styles.boardedText}>Boarded</Text>
                       ) : (
                         verifyingRideId === riderRide.rideId ? (
                           <View style={styles.inlineOtpRow}>
@@ -1278,7 +1375,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         <View style={styles.activeSheet}>
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.activeSheetHeader}>
             <Text style={styles.activeSheetTitle}>
-              {isArriving ? '🏍️ Head to Pickup' : '🚀 Trip in Progress'}
+              {isArriving ? 'Head to Pickup' : 'Trip in Progress'}
             </Text>
             <Text style={styles.activeSheetSubtitle}>
               {isArriving ? 'Arrive at customer location and verify OTP' : 'Driving customer to destination'}
@@ -1392,6 +1489,18 @@ export const CaptainDashboardScreen: React.FC = () => {
     );
   };
 
+  if (isInitialLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={{ color: Colors.textSecondary, marginTop: Spacing.md, fontSize: FontSize.base, fontWeight: FontWeight.medium }}>
+          Loading Captain Profile...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -1430,13 +1539,17 @@ export const CaptainDashboardScreen: React.FC = () => {
               <Text style={styles.captainName}>{user?.name}</Text>
             </View>
             <View style={styles.onlineToggle}>
-              <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelActive]}>
-                {isOnline ? '🟢 Online' : '🔴 Offline'}
-              </Text>
+              {isTogglingOnline || isLoading ? (
+                <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: Spacing.sm }} />
+              ) : (
+                <Text style={[styles.onlineLabel, isOnline && styles.onlineLabelActive]}>
+                  {isOnline ? '🟢 Online' : '🔴 Offline'}
+                </Text>
+              )}
               <Switch
                 value={isOnline}
                 onValueChange={handleToggleOnline}
-                disabled={isLoading}
+                disabled={isTogglingOnline || isLoading}
                 trackColor={{ false: Colors.surfaceBorder, true: 'rgba(255,90,31,0.3)' }}
                 thumbColor={isOnline ? Colors.primary : Colors.textMuted}
               />
@@ -1457,7 +1570,7 @@ export const CaptainDashboardScreen: React.FC = () => {
         {isOnline && user?.vehicle?.type === 'economy' && (
           <View style={styles.activeRouteCardDashboard}>
             <View style={styles.activeRouteHeaderRow}>
-              <Text style={styles.activeRouteTitle}>🛺 Active Shuttle Route</Text>
+              <Text style={styles.activeRouteTitle}>Active Shuttle Route</Text>
               <TouchableOpacity
                 style={styles.changeRouteDashboardBtn}
                 onPress={async () => {
@@ -1534,28 +1647,38 @@ export const CaptainDashboardScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Weekly Earnings</Text>
           <View style={styles.chart}>
-            {weeklyEarnings.map((day, i) => (
-              <View key={i} style={styles.chartBar}>
-                <Text style={styles.chartValue}>₹{(day.amount / 1000).toFixed(1)}k</Text>
-                <View style={styles.barContainer}>
-                  <LinearGradient
-                    colors={
-                      day.date === 'Sat'
-                        ? [Colors.primaryLight, Colors.primary]
-                        : [Colors.surfaceElevated, Colors.surfaceBorder]
-                    }
-                    style={[styles.bar, { height: (day.amount / maxEarning) * 100 }]}
-                  />
+            {chartData.map((day, i) => {
+              const formattedAmount = day.amount >= 1000 
+                ? `₹${(day.amount / 1000).toFixed(1)}k` 
+                : `₹${day.amount}`;
+              return (
+                <View key={i} style={styles.chartBar}>
+                  <Text style={styles.chartValue}>{formattedAmount}</Text>
+                  <View style={styles.barContainer}>
+                    <LinearGradient
+                      colors={
+                        day.day === 'Sat'
+                          ? [Colors.primaryLight, Colors.primary]
+                          : [Colors.surfaceElevated, Colors.surfaceBorder]
+                      }
+                      style={[styles.bar, { height: (day.amount / maxEarning) * 100 }]}
+                    />
+                  </View>
+                  <Text style={styles.chartDay}>{day.day}</Text>
                 </View>
-                <Text style={styles.chartDay}>{day.date}</Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
         {/* Recent Rides */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Rides</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md }}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Recent Rides</Text>
+            <TouchableOpacity onPress={handleOpenHistory} activeOpacity={0.7}>
+              <Text style={{ color: Colors.primary, fontWeight: FontWeight.bold, fontSize: FontSize.sm }}>View All</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.recentList}>
             {recentRides.length > 0 ? (
               recentRides.map((ride: any) => {
@@ -1613,12 +1736,21 @@ export const CaptainDashboardScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {[
-              { icon: '💳', label: 'Withdraw', sub: 'Instant transfer' },
               { icon: '📊', label: 'Analytics', sub: 'View reports' },
-              { icon: '🛠️', label: 'Vehicle', sub: 'Manage vehicle' },
-              { icon: '🎯', label: 'Incentives', sub: 'View offers' },
+              { icon: '🛠️', label: 'Vehicle', sub: 'Manage profile' },
             ].map((action, i) => (
-              <TouchableOpacity key={i} style={styles.actionCard}>
+              <TouchableOpacity 
+                key={i} 
+                style={styles.actionCard}
+                onPress={() => {
+                  if (action.label === 'Analytics') {
+                    navigation.navigate('Earnings');
+                  } else if (action.label === 'Vehicle') {
+                    navigation.navigate('Profile');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.actionIcon}>{action.icon}</Text>
                 <Text style={styles.actionLabel}>{action.label}</Text>
                 <Text style={styles.actionSub}>{action.sub}</Text>
@@ -1661,13 +1793,13 @@ export const CaptainDashboardScreen: React.FC = () => {
                   <View style={{ flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' }}>
                     <View style={styles.serviceBadge}>
                       <Text style={styles.serviceBadgeText}>
-                        {selectedHistoryRide.rideType === 'economy' ? '🛺 Shared Pool' : '🏍️ Bike Ride'}
+                        {selectedHistoryRide.rideType === 'economy' ? 'Shared Pool' : 'Bike Ride'}
                       </Text>
                     </View>
                     {selectedHistoryRide.rideType === 'economy' && (
                       <View style={[styles.serviceBadge, { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)' }]}>
                         <Text style={[styles.serviceBadgeText, { color: Colors.success }]}>
-                          👥 {selectedHistoryRide.poolId?.riders?.length || 1}/4 Passengers
+                          Passengers: {selectedHistoryRide.poolId?.riders?.length || 1}/4
                         </Text>
                       </View>
                     )}
@@ -1724,6 +1856,90 @@ export const CaptainDashboardScreen: React.FC = () => {
               </ScrollView>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Trip History Modal */}
+      <Modal
+        visible={showHistoryModal}
+        animationType="slide"
+        onRequestClose={() => setShowHistoryModal(false)}
+      >
+        <View style={styles.historyModalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+          
+          {/* Header */}
+          <View style={styles.historyHeader}>
+            <Text style={styles.historyTitle}>All Completed Rides</Text>
+            <TouchableOpacity style={styles.historyCloseBtn} onPress={() => setShowHistoryModal(false)}>
+              <Text style={styles.historyCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* List */}
+          <FlatList
+            data={historyRides}
+            keyExtractor={(item) => item.id || item._id}
+            contentContainerStyle={styles.historyListContent}
+            renderItem={({ item }) => {
+              const isDbRide = !!item.pickup;
+              const emoji = isDbRide ? getRideTypeEmoji(item.rideType) : '🏍️';
+              const formatLocationLabel = (loc: any) => {
+                if (!loc) return '';
+                const name = (loc.name || '').trim();
+                const address = (loc.address || '').trim();
+                const addressPart = address.split(',')[0] || '';
+                const isGeneric = ['my location', 'home', 'work', 'office', 'saved location'].includes(name.toLowerCase());
+                if (isGeneric || !name) {
+                  return addressPart || name;
+                }
+                return name;
+              };
+
+              const fromLabel = isDbRide ? formatLocationLabel(item.pickup) : '';
+              const toLabel = isDbRide ? formatLocationLabel(item.dropoff) : '';
+              const timeLabel = isDbRide ? getRideTime(item.date || item.createdAt) : '';
+              const durationLabel = isDbRide ? `${item.duration || 10} min` : '';
+              const rawFare = isDbRide ? (item.actualFare || item.fare) : '';
+              const fareLabel = typeof rawFare === 'object' && rawFare !== null
+                ? (rawFare.actual || rawFare.estimated || 0)
+                : (rawFare || 0);
+
+              return (
+                <TouchableOpacity
+                  style={styles.recentCard}
+                  onPress={() => {
+                    setShowHistoryModal(false);
+                    setSelectedHistoryRide(item);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.recentIcon}>
+                    <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                  </View>
+                  <View style={styles.recentInfo}>
+                    <Text style={styles.recentRoute} numberOfLines={1}>{fromLabel} → {toLabel}</Text>
+                    <Text style={styles.recentMeta}>{timeLabel} · {durationLabel}</Text>
+                  </View>
+                  <Text style={styles.recentFare}>₹{fareLabel}</Text>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyRecentCard}>
+                <Text style={styles.emptyRecentText}>
+                  {isHistoryLoading ? 'Loading history...' : 'No rides found.'}
+                </Text>
+              </View>
+            )}
+            onEndReached={handleLoadMoreHistory}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={() => (
+              isHistoryLoading && historyRides.length > 0 ? (
+                <Text style={styles.loadingMoreText}>Loading more...</Text>
+              ) : null
+            )}
+          />
         </View>
       </Modal>
     </View>
@@ -2384,4 +2600,21 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.medium,
     color: Colors.success,
   },
+  historyModalContainer: { flex: 1, backgroundColor: Colors.background },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.background,
+  },
+  historyTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  historyCloseBtn: { padding: 6, borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceElevated },
+  historyCloseText: { fontSize: FontSize.lg, color: Colors.textSecondary },
+  historyListContent: { padding: Spacing.xl, gap: Spacing.sm },
+  loadingMoreText: { textAlign: 'center', color: Colors.textMuted, marginVertical: Spacing.md, fontSize: FontSize.xs },
 });
