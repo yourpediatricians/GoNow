@@ -11,6 +11,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
 import { Colors, FontSize, FontWeight } from '../../constants/theme';
+import { Logo } from '../../components/Logo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -98,11 +99,7 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
             opacity: logoOpacity,
           },
         ]}>
-        <LinearGradient
-          colors={[Colors.primaryLight, Colors.primary]}
-          style={styles.logoBox}>
-          <Text style={styles.logoText}>GN</Text>
-        </LinearGradient>
+        <Logo size={150} style={styles.logoImage} />
 
         <Animated.View style={{ opacity: taglineOpacity }}>
           <Text style={styles.appName}>GoNow</Text>
@@ -134,24 +131,8 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   logoContainer: { alignItems: 'center' },
-  logoBox: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  logoText: {
-    fontSize: 38,
-    fontWeight: FontWeight.black,
-    color: Colors.white,
-    letterSpacing: -1,
+  logoImage: {
+    marginBottom: 16,
   },
   appName: {
     fontSize: 42,

@@ -20,6 +20,7 @@ import { RiderStackParamList } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { Logo } from '../../components/Logo';
 import { geocodingService } from '../../services/geocoding.service';
 import { useIsFocused } from '@react-navigation/native';
 import { rideService } from '../../services/ride.service';
@@ -400,9 +401,12 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
           style={styles.topGradient}
         />
         <View style={styles.topContent}>
-          <View>
-            <Text style={styles.greeting}>{greeting()},</Text>
-            <Text style={styles.userName}>{user?.name?.split(' ')[0]} 👋</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Logo size={44} />
+            <View>
+              <Text style={styles.greeting}>{greeting()},</Text>
+              <Text style={styles.userName}>{user?.name?.split(' ')[0]} 👋</Text>
+            </View>
           </View>
           <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
             <View style={styles.avatar}>

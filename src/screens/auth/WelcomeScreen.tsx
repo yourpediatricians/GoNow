@@ -12,6 +12,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
 import { Button } from '../../components/ui/Button';
+import { Logo } from '../../components/Logo';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -50,6 +51,7 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.circle2} />
 
         <View style={styles.heroContent}>
+          <Logo size={90} style={{ alignSelf: 'flex-start', marginBottom: 16 }} />
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.badge}>
             <Text style={styles.badgeText}>🚀 #1 Ride App in India</Text>
           </LinearGradient>

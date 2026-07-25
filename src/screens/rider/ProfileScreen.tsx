@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
 import { useCaptainStore } from '../../store/captainStore';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { Logo } from '../../components/Logo';
 
 const MENU_ITEMS = [
   { section: 'Account', items: [
@@ -136,6 +137,7 @@ export const ProfileScreen: React.FC = () => {
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <Text style={styles.logoutText}>Sign Out</Text>
           </TouchableOpacity>
+          <Logo size={60} style={{ marginTop: 12, opacity: 0.85 }} />
           <Text style={styles.version}>GoNow v1.0.0</Text>
         </View>
 

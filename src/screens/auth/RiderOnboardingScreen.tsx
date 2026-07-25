@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { Logo } from '../../components/Logo';
 import { userService } from '../../services/user.service';
 import { useAuthStore } from '../../store/authStore';
 
@@ -97,11 +98,7 @@ export const RiderOnboardingScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled">
         
         <View style={s.logoContainer}>
-          <LinearGradient
-            colors={[Colors.primaryLight, Colors.primary]}
-            style={s.logoBadge}>
-            <Text style={s.logoEmoji}>👋</Text>
-          </LinearGradient>
+          <Logo size={90} />
         </View>
 
         <View style={s.textContainer}>
