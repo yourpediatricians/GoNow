@@ -20,8 +20,6 @@ import { ActiveRideScreen } from '../screens/rider/ActiveRideScreen';
 import { BookingScreen } from '../screens/rider/BookingScreen';
 import { RideSearchScreen } from '../screens/rider/RideSearchScreen';
 import { RideCompleteScreen } from '../screens/rider/RideCompleteScreen';
-import { WalletScreen } from '../screens/rider/WalletScreen';
-import { NotificationsScreen } from '../screens/rider/NotificationsScreen';
 import { SelectLocationScreen } from '../screens/rider/SelectLocationScreen';
 import { EconomyBookingScreen } from '../screens/rider/EconomyBookingScreen';
 import { EconomyMatchingScreen } from '../screens/rider/EconomyMatchingScreen';
@@ -60,8 +58,6 @@ const AuthNavigator = () => (
 const RIDER_TABS = [
   { icon: '🏠', label: 'Home' },
   { icon: '📋', label: 'Trips' },
-  { icon: '👛', label: 'Wallet' },
-  { icon: '🔔', label: 'Alerts' },
   { icon: '👤', label: 'Profile' },
 ];
 
@@ -92,8 +88,6 @@ const RiderTabNavigator = () => (
   <RiderTab.Navigator tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
     <RiderTab.Screen name="Home" component={RiderHomeScreen} />
     <RiderTab.Screen name="History" component={RideHistoryScreen} />
-    <RiderTab.Screen name="Wallet" component={WalletScreen} />
-    <RiderTab.Screen name="Notifications" component={NotificationsScreen} />
     <RiderTab.Screen name="Profile" component={ProfileScreen} />
   </RiderTab.Navigator>
 );

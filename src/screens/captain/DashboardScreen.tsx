@@ -1648,6 +1648,7 @@ export const CaptainDashboardScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Weekly Earnings</Text>
           <View style={styles.chart}>
             {chartData.map((day, i) => {
+              const isToday = i === 6;
               const formattedAmount = day.amount >= 1000 
                 ? `₹${(day.amount / 1000).toFixed(1)}k` 
                 : `₹${day.amount}`;
@@ -1657,14 +1658,15 @@ export const CaptainDashboardScreen: React.FC = () => {
                   <View style={styles.barContainer}>
                     <LinearGradient
                       colors={
-                        day.day === 'Sat'
+                        isToday
                           ? [Colors.primaryLight, Colors.primary]
                           : [Colors.surfaceElevated, Colors.surfaceBorder]
                       }
-                      style={[styles.bar, { height: (day.amount / maxEarning) * 100 }]}
+                      style={[styles.bar, { height: (day.amount / maxEarning) * 90 }]}
                     />
                   </View>
-                  <Text style={styles.chartDay}>{day.day}</Text>
+                  <Text style={[styles.chartDay, isToday && styles.chartDayActive]}>{day.day}</Text>
+                  <Text style={styles.chartRides}>{day.rides}r</Text>
                 </View>
               );
             })}
@@ -2009,6 +2011,8 @@ const styles = StyleSheet.create({
   barContainer: { width: '100%', height: 100, justifyContent: 'flex-end' },
   bar: { width: '100%', borderRadius: 4, minHeight: 4 },
   chartDay: { fontSize: FontSize.xs, color: Colors.textMuted },
+  chartDayActive: { color: Colors.primary, fontWeight: FontWeight.bold },
+  chartRides: { fontSize: 8, color: Colors.textMuted },
   recentList: { gap: Spacing.sm },
   recentCard: {
     flexDirection: 'row',

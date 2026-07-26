@@ -9,10 +9,13 @@ import {
   TextInput,
   Alert,
   Platform,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { userService } from '../../services/user.service';
 
 type TabType = 'safety' | 'help' | 'rate' | 'terms';
 
@@ -24,8 +27,10 @@ interface FAQ {
 const FAQS: FAQ[] = [
   { q: 'How do I book a GoNow ride?', a: 'Open the GoNow app, set your destination in the "Where to?" box on the home screen, select your preferred ride option (Moto, E-Rickshaw, Auto, or Cab), check the estimated fare, and tap request to match with a captain near you.' },
   { q: 'What should I do if I forget an item in the ride?', a: 'Go to your Ride History in the profile tab, select the trip where you lost the item, and tap "Contact Captain". If you are unable to reach the captain, tap "Help & Support" or contact our 24/7 helpline.' },
-  { q: 'How are the ride fares calculated?', a: 'GoNow fares are transparently calculated based on base fare, distance traveled (per km rate), and traffic duration. Flat rates apply for certain pool/economy rickshaw routes. Fares are displayed upfront before you book.' },
-  { q: 'Can I share my ride location with family?', a: 'Yes! Once your ride starts, go to the active ride screen and tap "Share Trip". You can send a real-time tracking link to your contacts via WhatsApp, SMS, or any messaging app.' },
+  { q: 'How are the ride fares calculated?', a: 'GoNow offers flat-fare Shuttle E-Rickshaw (Economy) rides at a fixed ₹15 rate per passenger. For other private ride options (Bike, Cab, or Auto), the fare is calculated dynamically based on base fare, distance, and estimated travel duration.' },
+  { q: 'How does the Shuttle E-Rickshaw (Economy) ride work?', a: 'E-Rickshaw shuttles run on fixed Metro station routes. When you book a Shared Ride, the app snaps you to the nearest route stop. You simply walk to the designated pickup stop, board, and pay a flat ₹15 fare.' },
+  { q: 'What payment methods are supported?', a: 'Currently, payments are completed directly to the Captain at the end of the trip via Cash or any personal UPI app (no in-app wallet required).' },
+  { q: 'Can I change my route mid-trip?', a: 'For Shared E-Rickshaws, routes are fixed and cannot be changed mid-trip. For standard Bike or Cab rides, you may request the driver to adjust the path, but the final fare is calculated based on the original destination.' },
 ];
 
 export const SupportScreen: React.FC = () => {
@@ -43,6 +48,7 @@ export const SupportScreen: React.FC = () => {
   const [rating, setRating] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState('');
   const [submittedRating, setSubmittedRating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleToggleFaq = (index: number) => {
     setExpandedFaq(expandedFaq === index ? null : index);
@@ -56,13 +62,21 @@ export const SupportScreen: React.FC = () => {
     );
   };
 
-  const handleSubmitRating = () => {
+  const handleSubmitRating = async () => {
     if (rating === 0) {
       Alert.alert('Selection Required', 'Please select at least 1 star to rate the app.');
       return;
     }
-    setSubmittedRating(true);
-    Alert.alert('Thank You!', 'Your rating and feedback have been received. We appreciate your support!');
+    setIsSubmitting(true);
+    try {
+      await userService.rateApp(rating, feedbackText);
+      setSubmittedRating(true);
+      Alert.alert('Thank You!', 'Your rating and feedback have been received. We appreciate your support!');
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to submit feedback. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderSafetyTab = () => (
@@ -112,17 +126,20 @@ export const SupportScreen: React.FC = () => {
     <ScrollView contentContainerStyle={s.tabScroll} showsVerticalScrollIndicator={false}>
       <View style={s.chatSupportCard}>
         <View style={s.chatHeader}>
-          <Text style={s.chatIcon}>💬</Text>
+          <Text style={s.chatIcon}>✉️</Text>
           <View style={s.chatHeaderText}>
-            <Text style={s.chatTitle}>Need Instant Help?</Text>
-            <Text style={s.chatSub}>Our support executives are online right now.</Text>
+            <Text style={s.chatTitle}>Email Support</Text>
+            <Text style={s.chatSub}>Reach out to us at healthbridge.main@gmail.com for queries or disputes.</Text>
           </View>
         </View>
         <TouchableOpacity
           style={s.chatBtn}
-          onPress={() => Alert.alert('Chat Support', 'Connecting you with a support representative... (Simulated)')}
+          onPress={() => {
+            Linking.openURL('mailto:healthbridge.main@gmail.com?subject=GoNow Support Request')
+              .catch(() => Alert.alert('Email Support', 'Please send an email to healthbridge.main@gmail.com'));
+          }}
           activeOpacity={0.8}>
-          <Text style={s.chatBtnText}>Start Live Chat</Text>
+          <Text style={s.chatBtnText}>Send Email</Text>
         </TouchableOpacity>
       </View>
 
@@ -201,11 +218,19 @@ export const SupportScreen: React.FC = () => {
                 multiline
                 numberOfLines={4}
               />
-              <TouchableOpacity style={s.submitRateBtn} onPress={handleSubmitRating} activeOpacity={0.8}>
+              <TouchableOpacity 
+                style={s.submitRateBtn} 
+                onPress={handleSubmitRating} 
+                disabled={isSubmitting} 
+                activeOpacity={0.8}>
                 <LinearGradient
                   colors={[Colors.primaryLight, Colors.primary]}
                   style={s.submitRateBtnGrad}>
-                  <Text style={s.submitRateBtnText}>Submit Feedback</Text>
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <Text style={s.submitRateBtnText}>Submit Feedback</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
             </>
