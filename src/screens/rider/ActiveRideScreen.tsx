@@ -8,6 +8,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Linking,
 } from 'react-native';
 import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
@@ -27,6 +28,25 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
   const slideAnim = useRef(new Animated.Value(200)).current;
 
   const { cancelRide } = useRideStore();
+
+  const handleSOS = () => {
+    Alert.alert(
+      '🚨 Emergency SOS',
+      'Are you sure you want to call the Police Emergency Helpline (100)?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call 100',
+          style: 'destructive',
+          onPress: () => {
+            Linking.openURL('tel:100').catch(() => {
+              Alert.alert('Error', 'Unable to initiate call. Please dial 100 manually.');
+            });
+          },
+        },
+      ]
+    );
+  };
 
   const fetchRideDetails = async () => {
     if (!rideId) return null;
@@ -377,7 +397,7 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
             <Text style={styles.sosBtnText}>Cancel Ride</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.sosBtn} onPress={() => Alert.alert('Emergency', 'SOS Alert sent to support and emergency contacts!')}>
+          <TouchableOpacity style={styles.sosBtn} onPress={handleSOS}>
             <Text style={styles.sosBtnText}>🆘 Emergency SOS</Text>
           </TouchableOpacity>
         )}

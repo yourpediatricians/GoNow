@@ -56,9 +56,20 @@ export const SupportScreen: React.FC = () => {
 
   const handleSOSAlert = () => {
     Alert.alert(
-      '🚨 SOS Emergency Triggered',
-      'This is a simulation. In a real emergency, this action will notify our 24/7 security response team and share your current coordinates with local authorities.',
-      [{ text: 'Dismiss', style: 'cancel' }]
+      '🚨 Emergency SOS',
+      'Are you sure you want to call the Police Emergency Helpline (100)?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call 100',
+          style: 'destructive',
+          onPress: () => {
+            Linking.openURL('tel:100').catch(() => {
+              Alert.alert('Error', 'Unable to initiate call. Please dial 100 manually.');
+            });
+          },
+        },
+      ]
     );
   };
 

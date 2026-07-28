@@ -368,35 +368,7 @@ export const SelectLocationScreen: React.FC = () => {
               <Text style={s.emptyText}>No results found. Tap "Use typed address" to select "{query}"</Text>
             )}
           </View>
-        ) : (
-          <>
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>RECENT</Text>
-              {RECENT_SEARCHES.map(r => (
-                <TouchableOpacity key={r.id} style={s.placeRow} onPress={() => handleSelectPlace(r)} activeOpacity={0.7}>
-                  <View style={s.placeIcon}><Text style={{ fontSize: 20 }}>{r.icon}</Text></View>
-                  <View style={s.placeInfo}>
-                    <Text style={s.placeName}>{r.label}</Text>
-                    <Text style={s.placeSub}>{r.sub}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>POPULAR PLACES</Text>
-              {POPULAR_PLACES.map(p => (
-                <TouchableOpacity key={p.id} style={s.placeRow} onPress={() => handleSelectPlace(p)} activeOpacity={0.7}>
-                  <View style={s.placeIcon}><Text style={{ fontSize: 20 }}>{p.icon}</Text></View>
-                  <View style={s.placeInfo}>
-                    <Text style={s.placeName}>{p.label}</Text>
-                    <Text style={s.placeSub}>{p.sub}</Text>
-                  </View>
-                  <Text style={s.arrowIcon}>→</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
+        ) : null}
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
