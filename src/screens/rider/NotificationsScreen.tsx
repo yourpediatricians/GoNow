@@ -10,7 +10,7 @@ const NOTIFICATIONS = [
   { id: 'n2', type: 'ride', icon: '✅', title: 'Ride Completed', body: 'Your ride from Koramangala to MG Road is complete. ₹85 paid.', time: '1h ago', read: false },
   { id: 'n3', type: 'wallet', icon: '💰', title: 'Money Added', body: '₹500 added to your GoNow wallet successfully.', time: '2h ago', read: true },
   { id: 'n4', type: 'promo', icon: '🎁', title: 'Referral Bonus Credited!', body: 'Your friend Neha joined GoNow. ₹100 added to your wallet.', time: 'Yesterday', read: true },
-  { id: 'n5', type: 'ride', icon: '🔎', title: 'Looking for captain...', body: "We're finding the best captain near you. This may take a moment.", time: 'Yesterday', read: true },
+  { id: 'n5', type: 'ride', icon: '🔎', title: 'Looking for captain...', body: "We're finding a captain near you. This may take a moment.", time: 'Yesterday', read: true },
   { id: 'n6', type: 'safety', icon: '🛡️', title: 'Safety Reminder', body: 'Always share your ride details with a trusted contact.', time: 'Dec 14', read: true },
   { id: 'n7', type: 'promo', icon: '🌟', title: "You've earned Gold status!", body: 'Complete 5 more rides to unlock exclusive perks.', time: 'Dec 13', read: true },
 ];

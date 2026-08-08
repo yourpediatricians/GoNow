@@ -22,7 +22,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 const features = [
   { icon: '⚡', label: 'Instant Booking' },
   { icon: '🛡️', label: 'Safe Rides' },
-  { icon: '💰', label: 'Best Prices' },
+  { icon: '💰', label: 'Affordable Rates' },
 ];
 
 export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
@@ -53,16 +53,16 @@ export const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.heroContent}>
           <Logo size={90} style={{ alignSelf: 'flex-start', marginBottom: 16 }} />
           <LinearGradient colors={[Colors.primaryLight, Colors.primary]} style={styles.badge}>
-            <Text style={styles.badgeText}>🚀 #1 Ride App in India</Text>
+            <Text style={styles.badgeText}>🚀 Fast & Convenient Rides</Text>
           </LinearGradient>
 
           <Text style={styles.heroTitle}>{'Move\nFaster,\nSmarter.'}</Text>
 
           <View style={styles.statsRow}>
             {[
-              { value: '50K+', label: 'Captains' },
-              { value: '4.8★', label: 'Rating' },
-              { value: '2M+', label: 'Rides' },
+              { value: '⚡', label: 'Instant Match' },
+              { value: '🛡️', label: 'Verified' },
+              { value: '📍', label: 'Live Tracking' },
             ].map((stat, i) => (
               <View key={i} style={styles.statItem}>
                 <Text style={styles.statValue}>{stat.value}</Text>
