@@ -83,18 +83,64 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   verifyOtp: async (phone, otp, role) => {
     set({ isLoading: true });
     try {
-      if (!confirmationResult) {
-        throw new Error('No active OTP session found. Please request a code first.');
+      let idToken: string | null = null;
+
+      // 1. Check if user is ALREADY signed in natively by Firebase (e.g. instant background verification)
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        try {
+          idToken = await currentUser.getIdToken(true);
+        } catch (e) {
+          console.warn('Failed to get token from currentUser:', e);
+        }
       }
 
-      // 1. Verify code natively with Firebase
-      const credential = await confirmationResult.confirm(otp);
-      if (!credential || !credential.user) {
+      // 2. If not logged in yet, perform manual verification
+      if (!idToken) {
+        if (!confirmationResult) {
+          throw new Error('No active OTP session found. Please request a code first.');
+        }
+
+        try {
+          const credential = await confirmationResult.confirm(otp);
+          if (credential?.user) {
+            idToken = await credential.user.getIdToken();
+          }
+        } catch (confirmErr: any) {
+          console.warn('confirmationResult.confirm failed, attempting fallback checks:', confirmErr);
+
+          // Fallback A: Try creating credential directly from verificationId string
+          if (confirmationResult.verificationId) {
+            try {
+              const phoneCred = auth.PhoneAuthProvider.credential(confirmationResult.verificationId, otp);
+              const userCred = await auth().signInWithCredential(phoneCred);
+              if (userCred?.user) {
+                idToken = await userCred.user.getIdToken();
+              }
+            } catch (phoneCredErr) {
+              console.warn('PhoneAuthProvider.credential fallback failed:', phoneCredErr);
+            }
+          }
+
+          // Fallback B: Check if Firebase native SDK signed in currentUser during the confirm attempt
+          if (!idToken && auth().currentUser) {
+            try {
+              idToken = await auth().currentUser!.getIdToken(true);
+            } catch (e) {
+              console.warn('currentUser fallback token error:', e);
+            }
+          }
+
+          // If all fallbacks failed, throw original error
+          if (!idToken) {
+            throw confirmErr;
+          }
+        }
+      }
+
+      if (!idToken) {
         throw new Error('Firebase OTP verification failed.');
       }
-
-      // 2. Fetch Firebase ID Token
-      const idToken = await credential.user.getIdToken();
 
       // 3. Authenticate with GoNow backend
       const result = await authService.firebaseVerify(idToken, role);
