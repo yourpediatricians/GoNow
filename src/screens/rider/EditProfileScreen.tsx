@@ -85,6 +85,10 @@ export const EditProfileScreen: React.FC = () => {
         Alert.alert('Validation Error', 'Vehicle Model is required.');
         return;
       }
+      if (!vehicleColor.trim()) {
+        Alert.alert('Validation Error', 'Vehicle Color is required.');
+        return;
+      }
       if (!licensePlate.trim()) {
         Alert.alert('Validation Error', 'License Plate is required.');
         return;

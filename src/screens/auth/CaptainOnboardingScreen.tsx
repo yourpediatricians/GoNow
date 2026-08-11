@@ -69,6 +69,7 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
     if (!vehicleType) { Alert.alert('Required', 'Please select a vehicle type'); return; }
     if (!vehicleMake.trim()) { Alert.alert('Required', 'Please enter vehicle make (e.g. Honda)'); return; }
     if (!vehicleModel.trim()) { Alert.alert('Required', 'Please enter vehicle model'); return; }
+    if (!vehicleColor.trim()) { Alert.alert('Required', 'Please enter vehicle color (e.g. Black)'); return; }
     if (!licensePlate.trim()) { Alert.alert('Required', 'Please enter license plate number'); return; }
     animateNext('documents');
   };
