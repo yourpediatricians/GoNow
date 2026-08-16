@@ -19,35 +19,71 @@ import { GOOGLE_MAPS_API_KEY } from '../../config/api.config';
 import Geolocation from '@react-native-community/geolocation';
 import axios from 'axios';
 import { geocodingService } from '../../services/geocoding.service';
-
-const RECENT_SEARCHES = [
-  { id: '1', icon: '🕐', label: 'Dilshad Garden Metro', sub: 'GT Road, Shahdara, Delhi', latitude: 28.6759, longitude: 77.3216 },
-  { id: '2', icon: '🕐', label: 'Maujpur Metro Station', sub: 'Maujpur Main Road, Delhi', latitude: 28.6885, longitude: 77.2764 },
-  { id: '3', icon: '🕐', label: 'Shahdara Metro Station', sub: 'Shahdara, Delhi', latitude: 28.6733, longitude: 77.2897 },
-];
-
-const POPULAR_PLACES = [
-  { id: 'p1', icon: '🛍️', label: 'Bhajanpura Market', sub: 'Bhajanpura Chowk, Delhi', latitude: 28.7001, longitude: 77.2625 },
-  { id: 'p2', icon: '🏥', label: 'GTB Hospital', sub: 'Dilshad Garden, Delhi', latitude: 28.6841, longitude: 77.3090 },
-  { id: 'p3', icon: '🚇', label: 'Welcome Metro Station', sub: 'Welcome, Delhi', latitude: 28.6719, longitude: 77.2781 },
-  { id: 'p4', icon: '🚇', label: 'Seelampur Metro', sub: 'GT Road, Delhi', latitude: 28.6639, longitude: 77.2678 },
-  { id: 'p5', icon: '🏡', label: 'Yamuna Vihar', sub: 'C-Block, Shahdara, Delhi', latitude: 28.6923, longitude: 77.2662 },
-  { id: 'p6', icon: '🚇', label: 'Gokulpuri Metro', sub: 'Gokulpuri, Delhi', latitude: 28.7032, longitude: 77.2798 },
-];
+import { metroService, MetroStation, calculateDistanceKm, formatDistanceString } from '../../services/metro.service';
 
 export const SelectLocationScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { setPickup, setDropoff } = useRideStore();
+  const { setPickup, setDropoff, pickup } = useRideStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // User GPS coordinates state for dynamic proximity sorting
+  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: pickup?.latitude || 28.6719,
+    longitude: pickup?.longitude || 77.2781,
+  });
+
+  const [nearestMetros, setNearestMetros] = useState<MetroStation[]>([]);
 
   const type: 'pickup' | 'dropoff' = route.params?.type || 'dropoff';
   const preSelectedRide = route.params?.preSelectedRide;
   const placeholder = type === 'pickup' ? 'Enter pickup location...' : 'Where to? Search location...';
 
-  // Fetch suggestions when query changes
+  // 1. On mount: Fetch live GPS location & calculate nearest Metro stations sorted by proximity
+  useEffect(() => {
+    // If store already has pickup location, use it immediately
+    if (pickup?.latitude && pickup?.longitude) {
+      const coords = { latitude: pickup.latitude, longitude: pickup.longitude };
+      setCurrentCoords(coords);
+      setNearestMetros(metroService.getNearestMetroStations(coords.latitude, coords.longitude, '', 10));
+    }
+
+    // Also request active GPS location
+    fetchCurrentLocation();
+  }, []);
+
+  const fetchCurrentLocation = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        if (!granted) {
+          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        }
+      } catch (err) {
+        console.warn('Permission error:', err);
+      }
+    }
+
+    Geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setCurrentCoords(coords);
+        // Calculate nearest metro stations sorted from closest to farthest
+        const sorted = metroService.getNearestMetroStations(coords.latitude, coords.longitude, '', 10);
+        setNearestMetros(sorted);
+      },
+      (err) => {
+        console.log('Location fetch fallback:', err);
+        // Fallback calculation using currentCoords
+        setNearestMetros(metroService.getNearestMetroStations(currentCoords.latitude, currentCoords.longitude, '', 10));
+      },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+    );
+  };
+
+  // 2. Fetch suggestions when query changes
   useEffect(() => {
     if (query.trim().length <= 1) {
       setResults([]);
@@ -63,55 +99,52 @@ export const SelectLocationScreen: React.FC = () => {
 
   const searchPlaces = async (text: string) => {
     setIsLoading(true);
-    // If no key or placeholder, run local mock search
+
+    // Filter matching metro stations sorted by proximity
+    const matchingMetros = metroService.getNearestMetroStations(
+      currentCoords.latitude,
+      currentCoords.longitude,
+      text,
+      5
+    ).map(m => ({
+      id: m.id,
+      label: m.name,
+      sub: `${m.address} • ${m.formattedDistance}`,
+      icon: '🚇',
+      latitude: m.latitude,
+      longitude: m.longitude,
+      isGoogle: false,
+    }));
+
     if (!GOOGLE_MAPS_API_KEY) {
-      const filtered = POPULAR_PLACES.filter(p =>
-        p.label.toLowerCase().includes(text.toLowerCase()) ||
-        p.sub.toLowerCase().includes(text.toLowerCase())
-      ).map(p => ({
-        id: p.id,
-        label: p.label,
-        sub: p.sub,
-        icon: p.icon,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        isGoogle: false,
-      }));
-      setResults(filtered);
+      setResults(matchingMetros);
       setIsLoading(false);
       return;
     }
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${GOOGLE_MAPS_API_KEY}&components=country:in`;
+      // Pass location bias (location & radius) so Google Places returns nearby results first
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${currentCoords.latitude},${currentCoords.longitude}&radius=10000&key=${GOOGLE_MAPS_API_KEY}&components=country:in`;
       const response = await axios.get(url);
+
       if (response.data?.status === 'OK' && response.data.predictions) {
         const mapped = response.data.predictions.map((p: any) => ({
           id: p.place_id,
           label: p.structured_formatting?.main_text || p.description,
           sub: p.structured_formatting?.secondary_text || '',
-          icon: '📍',
+          icon: p.description?.toLowerCase().includes('metro') ? '🚇' : '📍',
           isGoogle: true,
         }));
-        setResults(mapped);
+
+        // Combine nearest matching metros at top + Google places
+        const combined = [...matchingMetros, ...mapped.filter((g: any) => !matchingMetros.some(m => m.label.toLowerCase() === g.label.toLowerCase()))];
+        setResults(combined);
       } else {
-        setResults([]);
+        setResults(matchingMetros);
       }
     } catch (err) {
       console.warn('Google Places Autocomplete error:', err);
-      // fallback to local list on error
-      const filtered = POPULAR_PLACES.filter(p =>
-        p.label.toLowerCase().includes(text.toLowerCase())
-      ).map(p => ({
-        id: p.id,
-        label: p.label,
-        sub: p.sub,
-        icon: p.icon,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        isGoogle: false,
-      }));
-      setResults(filtered);
+      setResults(matchingMetros);
     } finally {
       setIsLoading(false);
     }
@@ -119,8 +152,8 @@ export const SelectLocationScreen: React.FC = () => {
 
   const handleSelectPlace = async (place: any) => {
     setIsLoading(true);
-    let lat = place.latitude || 12.9716;
-    let lng = place.longitude || 77.5946;
+    let lat = place.latitude || currentCoords.latitude;
+    let lng = place.longitude || currentCoords.longitude;
 
     if (place.isGoogle && GOOGLE_MAPS_API_KEY) {
       try {
@@ -137,7 +170,7 @@ export const SelectLocationScreen: React.FC = () => {
     }
 
     const selectedLoc = {
-      address: `${place.label}${place.sub ? `, ${place.sub}` : ''}`,
+      address: `${place.label}${place.sub ? `, ${place.sub.split('•')[0].trim()}` : ''}`,
       name: place.label,
       latitude: lat,
       longitude: lng,
@@ -175,17 +208,16 @@ export const SelectLocationScreen: React.FC = () => {
   };
 
   const handleCustomAddress = () => {
-    const { pickup, dropoff } = useRideStore.getState();
-    let lat = 12.9716;
-    let lng = 77.5946;
+    const { pickup: storePickup, dropoff: storeDropoff } = useRideStore.getState();
+    let lat = currentCoords.latitude;
+    let lng = currentCoords.longitude;
 
-    // Apply offset from the other point so haversineDistance is valid & not 0/NaN
-    if (type === 'pickup' && dropoff) {
-      lat = dropoff.latitude - 0.015;
-      lng = dropoff.longitude - 0.015;
-    } else if (type === 'dropoff' && pickup) {
-      lat = pickup.latitude + 0.015;
-      lng = pickup.longitude + 0.015;
+    if (type === 'pickup' && storeDropoff) {
+      lat = storeDropoff.latitude - 0.015;
+      lng = storeDropoff.longitude - 0.015;
+    } else if (type === 'dropoff' && storePickup) {
+      lat = storePickup.latitude + 0.015;
+      lng = storePickup.longitude + 0.015;
     }
 
     const customLoc = {
@@ -225,31 +257,6 @@ export const SelectLocationScreen: React.FC = () => {
 
   const handleUseCurrentLocation = async () => {
     setIsLoading(true);
-    if (Platform.OS === 'android') {
-      try {
-        const alreadyGranted = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        if (!alreadyGranted) {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message: 'GoNow needs your location to set the pickup spot.',
-              buttonPositive: 'Allow',
-              buttonNegative: 'Deny',
-            }
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Current location permission check error:', err);
-      }
-    }
-
     Geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
@@ -351,7 +358,7 @@ export const SelectLocationScreen: React.FC = () => {
           </TouchableOpacity>
         )}
 
-        {/* Search results */}
+        {/* Search Results */}
         {query.trim().length > 1 ? (
           <View style={s.section}>
             <Text style={s.sectionTitle}>RESULTS</Text>
@@ -368,7 +375,44 @@ export const SelectLocationScreen: React.FC = () => {
               <Text style={s.emptyText}>No results found. Tap "Use typed address" to select "{query}"</Text>
             )}
           </View>
-        ) : null}
+        ) : (
+          /* Default Suggestions: Nearest Metro Stations sorted from closest to farthest */
+          <View style={s.section}>
+            <View style={s.metroSectionHeader}>
+              <Text style={s.sectionTitle}>🚇 NEAREST METRO STATIONS</Text>
+              <Text style={s.metroBadge}>Sorted by Proximity</Text>
+            </View>
+
+            {nearestMetros.map((metro) => (
+              <TouchableOpacity
+                key={metro.id}
+                style={s.metroCard}
+                onPress={() => handleSelectPlace({
+                  label: metro.name,
+                  sub: metro.address,
+                  latitude: metro.latitude,
+                  longitude: metro.longitude,
+                })}
+                activeOpacity={0.75}>
+                <View style={s.metroIconBox}>
+                  <Text style={{ fontSize: 22 }}>🚇</Text>
+                </View>
+                <View style={s.placeInfo}>
+                  <View style={s.metroTitleRow}>
+                    <Text style={s.metroName}>{metro.name}</Text>
+                    {metro.lineColor && (
+                      <View style={[s.lineIndicator, { backgroundColor: metro.lineColor }]} />
+                    )}
+                  </View>
+                  <Text style={s.placeSub} numberOfLines={1}>{metro.address}</Text>
+                </View>
+                <View style={s.distanceBadge}>
+                  <Text style={s.distanceText}>📍 {metro.formattedDistance}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -378,26 +422,52 @@ export const SelectLocationScreen: React.FC = () => {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { backgroundColor: Colors.surface, padding: Spacing.xl, paddingTop: 54, gap: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
-  backBtnText: { fontSize: FontSize.xl, color: Colors.textPrimary },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md, gap: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, flex: 1, minHeight: 48 },
-  searchIcon: { fontSize: 16 },
-  searchInput: { flex: 1, fontSize: FontSize.base, color: '#FFFFFF', paddingVertical: Platform.OS === 'ios' ? 12 : 8, paddingHorizontal: 0, margin: 0 },
-  clearBtn: { fontSize: 14, color: Colors.textMuted, padding: 4 },
-  currentLocationRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl, gap: Spacing.md },
-  currentLocationIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,90,31,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,90,31,0.2)' },
-  currentLocationTitle: { fontSize: FontSize.base, fontWeight: FontWeight.semiBold, color: Colors.primary },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  backBtnText: { fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  searchIcon: { fontSize: 16, marginRight: Spacing.xs },
+  searchInput: { flex: 1, height: 48, fontSize: FontSize.md, color: Colors.textPrimary },
+  clearBtn: { fontSize: 16, color: Colors.textMuted, padding: Spacing.xs },
+  currentLocationRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl, gap: Spacing.md, backgroundColor: Colors.surface },
+  currentLocationIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,90,31,0.15)', alignItems: 'center', justifyContent: 'center' },
+  currentLocationTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semiBold, color: Colors.primary },
   currentLocationSub: { fontSize: FontSize.xs, color: Colors.textMuted },
   divider: { height: 1, backgroundColor: Colors.surfaceBorder, marginHorizontal: Spacing.xl },
-  customRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, gap: Spacing.md },
-  customIcon: { width: 44, height: 44, borderRadius: BorderRadius.md, backgroundColor: 'rgba(34,197,94,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)' },
-  section: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg },
-  sectionTitle: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semiBold, letterSpacing: 1, marginBottom: Spacing.md },
-  placeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.md },
-  placeIcon: { width: 44, height: 44, borderRadius: BorderRadius.md, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  customRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.xl, gap: Spacing.md, backgroundColor: 'rgba(255,90,31,0.05)', borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
+  customIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  section: { padding: Spacing.xl },
+  sectionTitle: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textMuted, letterSpacing: 1 },
+  metroSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  metroBadge: { fontSize: 10, fontWeight: FontWeight.bold, color: Colors.primary, backgroundColor: 'rgba(255,90,31,0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  metroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    gap: Spacing.md,
+  },
+  metroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metroName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  lineIndicator: { width: 8, height: 8, borderRadius: 4 },
+  placeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: Spacing.md },
+  placeIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
   placeInfo: { flex: 1 },
-  placeName: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textPrimary },
+  placeName: { fontSize: FontSize.md, fontWeight: FontWeight.semiBold, color: Colors.textPrimary },
   placeSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  arrowIcon: { fontSize: FontSize.base, color: Colors.textMuted },
-  emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', paddingVertical: Spacing.xl },
+  distanceBadge: { backgroundColor: 'rgba(255,90,31,0.12)', paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.md },
+  distanceText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
+  arrowIcon: { fontSize: 16, color: Colors.textMuted },
+  emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic', marginTop: Spacing.md },
 });

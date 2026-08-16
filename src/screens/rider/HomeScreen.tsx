@@ -25,6 +25,7 @@ import { geocodingService } from '../../services/geocoding.service';
 import { useIsFocused } from '@react-navigation/native';
 import { rideService } from '../../services/ride.service';
 import { poolService } from '../../services/pool.service';
+import { metroService } from '../../services/metro.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RiderTabs'> & { navigation: any };
 
@@ -193,6 +194,23 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       isSet: !!savedWork,
     },
   ];
+
+  // Calculate nearest Metro station based on current pickup or default coords
+  const userLat = pickup?.latitude || 28.6719;
+  const userLng = pickup?.longitude || 77.2781;
+  const nearestMetro = metroService.getNearestMetroStations(userLat, userLng, '', 1)[0];
+
+  if (nearestMetro) {
+    quickDestinations.push({
+      id: 'nearest_metro',
+      icon: '🚇',
+      label: `${nearestMetro.name} (${nearestMetro.formattedDistance})`,
+      address: nearestMetro.address,
+      latitude: nearestMetro.latitude,
+      longitude: nearestMetro.longitude,
+      isSet: true,
+    });
+  }
 
   // Request location permission & get current location on mount
   useEffect(() => {
