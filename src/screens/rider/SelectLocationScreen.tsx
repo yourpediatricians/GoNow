@@ -28,12 +28,10 @@ export const SelectLocationScreen: React.FC = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLocating, setIsLocating] = useState(true); // true while waiting for real GPS
 
   // User GPS coordinates state for dynamic proximity sorting
-  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number }>({
-    latitude: pickup?.latitude || 28.6719,
-    longitude: pickup?.longitude || 77.2781,
-  });
+  const [currentCoords, setCurrentCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const [nearestMetros, setNearestMetros] = useState<MetroStation[]>([]);
 
@@ -41,20 +39,13 @@ export const SelectLocationScreen: React.FC = () => {
   const preSelectedRide = route.params?.preSelectedRide;
   const placeholder = type === 'pickup' ? 'Enter pickup location...' : 'Where to? Search location...';
 
-  // 1. On mount: Fetch live GPS location & calculate nearest Metro stations sorted by proximity
+  // 1. On mount: request real GPS then populate metro list
   useEffect(() => {
-    // If store already has pickup location, use it immediately
-    if (pickup?.latitude && pickup?.longitude) {
-      const coords = { latitude: pickup.latitude, longitude: pickup.longitude };
-      setCurrentCoords(coords);
-      setNearestMetros(metroService.getNearestMetroStations(coords.latitude, coords.longitude, '', 10));
-    }
-
-    // Also request active GPS location
     fetchCurrentLocation();
   }, []);
 
   const fetchCurrentLocation = async () => {
+    setIsLocating(true);
     if (Platform.OS === 'android') {
       try {
         const granted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
@@ -70,16 +61,17 @@ export const SelectLocationScreen: React.FC = () => {
       (pos) => {
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         setCurrentCoords(coords);
-        // Calculate nearest metro stations sorted from closest to farthest
-        const sorted = metroService.getNearestMetroStations(coords.latitude, coords.longitude, '', 10);
+        // Populate metros from rider's REAL GPS location
+        const sorted = metroService.getNearestMetroStations(coords.latitude, coords.longitude, '', 5);
         setNearestMetros(sorted);
+        setIsLocating(false);
       },
       (err) => {
-        console.log('Location fetch fallback:', err);
-        // Fallback calculation using currentCoords
-        setNearestMetros(metroService.getNearestMetroStations(currentCoords.latitude, currentCoords.longitude, '', 10));
+        console.log('GPS unavailable:', err);
+        // Do NOT seed with fake fallback — show empty with a message
+        setIsLocating(false);
       },
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 30000 }
     );
   };
 
@@ -98,12 +90,13 @@ export const SelectLocationScreen: React.FC = () => {
   }, [query]);
 
   const searchPlaces = async (text: string) => {
+    const coords = currentCoords || { latitude: 28.6719, longitude: 77.2781 }; // fallback only for search API bias
     setIsLoading(true);
 
-    // Filter matching metro stations sorted by proximity
+    // Filter matching metro stations sorted by proximity to rider's real GPS
     const matchingMetros = metroService.getNearestMetroStations(
-      currentCoords.latitude,
-      currentCoords.longitude,
+      coords.latitude,
+      coords.longitude,
       text,
       5
     ).map(m => ({
@@ -124,7 +117,7 @@ export const SelectLocationScreen: React.FC = () => {
 
     try {
       // Pass location bias (location & radius) so Google Places returns nearby results first
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${currentCoords.latitude},${currentCoords.longitude}&radius=10000&key=${GOOGLE_MAPS_API_KEY}&components=country:in`;
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&location=${coords.latitude},${coords.longitude}&radius=10000&key=${GOOGLE_MAPS_API_KEY}&components=country:in`;
       const response = await axios.get(url);
 
       if (response.data?.status === 'OK' && response.data.predictions) {
@@ -152,8 +145,8 @@ export const SelectLocationScreen: React.FC = () => {
 
   const handleSelectPlace = async (place: any) => {
     setIsLoading(true);
-    let lat = place.latitude || currentCoords.latitude;
-    let lng = place.longitude || currentCoords.longitude;
+    let lat = place.latitude || currentCoords?.latitude || 28.6719;
+    let lng = place.longitude || currentCoords?.longitude || 77.2781;
 
     if (place.isGoogle && GOOGLE_MAPS_API_KEY) {
       try {
@@ -209,8 +202,8 @@ export const SelectLocationScreen: React.FC = () => {
 
   const handleCustomAddress = () => {
     const { pickup: storePickup, dropoff: storeDropoff } = useRideStore.getState();
-    let lat = currentCoords.latitude;
-    let lng = currentCoords.longitude;
+    let lat = currentCoords?.latitude ?? 28.6719;
+    let lng = currentCoords?.longitude ?? 77.2781;
 
     if (type === 'pickup' && storeDropoff) {
       lat = storeDropoff.latitude - 0.015;
@@ -376,41 +369,56 @@ export const SelectLocationScreen: React.FC = () => {
             )}
           </View>
         ) : (
-          /* Default Suggestions: Nearest Metro Stations sorted from closest to farthest */
+          /* Default Suggestions: Nearest Metro Stations based on rider's real GPS */
           <View style={s.section}>
             <View style={s.metroSectionHeader}>
-              <Text style={s.sectionTitle}>🚇 NEAREST METRO STATIONS</Text>
-              <Text style={s.metroBadge}>Sorted by Proximity</Text>
+              <Text style={s.sectionTitle}>🚇 NEARBY METRO STATIONS</Text>
+              {!isLocating && nearestMetros.length > 0 && (
+                <Text style={s.metroBadge}>Nearest to You</Text>
+              )}
             </View>
 
-            {nearestMetros.map((metro) => (
-              <TouchableOpacity
-                key={metro.id}
-                style={s.metroCard}
-                onPress={() => handleSelectPlace({
-                  label: metro.name,
-                  sub: metro.address,
-                  latitude: metro.latitude,
-                  longitude: metro.longitude,
-                })}
-                activeOpacity={0.75}>
-                <View style={s.metroIconBox}>
-                  <Text style={{ fontSize: 22 }}>🚇</Text>
-                </View>
-                <View style={s.placeInfo}>
-                  <View style={s.metroTitleRow}>
-                    <Text style={s.metroName}>{metro.name}</Text>
-                    {metro.lineColor && (
-                      <View style={[s.lineIndicator, { backgroundColor: metro.lineColor }]} />
-                    )}
+            {isLocating ? (
+              // GPS is still resolving — show spinner
+              <View style={s.locatingRow}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={s.locatingText}>Detecting your location…</Text>
+              </View>
+            ) : nearestMetros.length > 0 ? (
+              nearestMetros.map((metro) => (
+                <TouchableOpacity
+                  key={metro.id}
+                  style={s.metroCard}
+                  onPress={() => handleSelectPlace({
+                    label: metro.name,
+                    sub: metro.address,
+                    latitude: metro.latitude,
+                    longitude: metro.longitude,
+                  })}
+                  activeOpacity={0.75}>
+                  <View style={s.metroIconBox}>
+                    <Text style={{ fontSize: 22 }}>🚇</Text>
                   </View>
-                  <Text style={s.placeSub} numberOfLines={1}>{metro.address}</Text>
-                </View>
-                <View style={s.distanceBadge}>
-                  <Text style={s.distanceText}>📍 {metro.formattedDistance}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={s.placeInfo}>
+                    <View style={s.metroTitleRow}>
+                      <Text style={s.metroName}>{metro.name}</Text>
+                      {metro.lineColor && (
+                        <View style={[s.lineIndicator, { backgroundColor: metro.lineColor }]} />
+                      )}
+                    </View>
+                    <Text style={s.placeSub} numberOfLines={1}>{metro.address}</Text>
+                  </View>
+                  <View style={s.distanceBadge}>
+                    <Text style={s.distanceText}>📍 {metro.formattedDistance}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              // GPS resolved but no metro stations found near the rider's location
+              <View style={s.locatingRow}>
+                <Text style={s.locatingText}>No metro stations found near your location</Text>
+              </View>
+            )}
           </View>
         )}
         <View style={{ height: 40 }} />
@@ -470,4 +478,6 @@ const s = StyleSheet.create({
   distanceText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
   arrowIcon: { fontSize: 16, color: Colors.textMuted },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic', marginTop: Spacing.md },
+  locatingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.lg },
+  locatingText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic' },
 });
