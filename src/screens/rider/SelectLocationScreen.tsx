@@ -414,10 +414,8 @@ export const SelectLocationScreen: React.FC = () => {
                 </TouchableOpacity>
               ))
             ) : (
-              // GPS resolved but no metro stations found near the rider's location
-              <View style={s.locatingRow}>
-                <Text style={s.locatingText}>No metro stations found near your location</Text>
-              </View>
+              // GPS resolved but no metro stations within 50km of rider
+              <Text style={s.noSuggestionsText}>No suggestions</Text>
             )}
           </View>
         )}
@@ -478,6 +476,7 @@ const s = StyleSheet.create({
   distanceText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
   arrowIcon: { fontSize: 16, color: Colors.textMuted },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic', marginTop: Spacing.md },
+  noSuggestionsText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic', marginTop: Spacing.md },
   locatingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.lg },
   locatingText: { fontSize: FontSize.sm, color: Colors.textMuted, fontStyle: 'italic' },
 });

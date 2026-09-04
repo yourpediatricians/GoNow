@@ -174,6 +174,8 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
     !isNaN(addr.latitude) && !isNaN(addr.longitude)
   );
 
+  const [nearestMetro, setNearestMetro] = useState<any>(null);
+
   const quickDestinations = [
     {
       id: 'home',
@@ -193,15 +195,8 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       longitude: savedWork?.longitude,
       isSet: !!savedWork,
     },
-  ];
-
-  // Calculate nearest Metro station based on current pickup or default coords
-  const userLat = pickup?.latitude || 28.6719;
-  const userLng = pickup?.longitude || 77.2781;
-  const nearestMetro = metroService.getNearestMetroStations(userLat, userLng, '', 1)[0];
-
-  if (nearestMetro) {
-    quickDestinations.push({
+    // Only added after real GPS resolves — never hardcoded
+    ...(nearestMetro ? [{
       id: 'nearest_metro',
       icon: '🚇',
       label: `${nearestMetro.name} (${nearestMetro.formattedDistance})`,
@@ -209,8 +204,8 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       latitude: nearestMetro.latitude,
       longitude: nearestMetro.longitude,
       isSet: true,
-    });
-  }
+    }] : []),
+  ];
 
   // Request location permission & get current location on mount
   useEffect(() => {
@@ -251,6 +246,12 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
             name: 'My Location',
           };
           setPickup(loc); // pre-fill pickup in store
+
+          // Set nearest metro chip from real GPS — no hardcoded fallback
+          const metro = metroService.getNearestMetroStations(lat, lng, '', 1)[0];
+          if (metro) {
+            setNearestMetro(metro);
+          }
         },
         (err) => console.log('Rider location error:', err),
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
@@ -319,14 +320,13 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
       return;
     }
 
-    const { pickup } = useRideStore.getState();
-    const activePickup = pickup || {
-      latitude: 28.6719,
-      longitude: 77.2781,
-      address: 'Welcome Metro Station, Welcome, Delhi',
-      name: 'Welcome Metro',
-    };
-    
+    const { pickup: currentPickup } = useRideStore.getState();
+    if (!currentPickup) {
+      Alert.alert('Set Pickup First', 'Please allow location access or set your pickup location before selecting a destination.');
+      return;
+    }
+    const activePickup = currentPickup;
+
     setPickup(activePickup);
     const dropoffLoc = {
       latitude: dest.latitude,

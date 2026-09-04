@@ -84,7 +84,8 @@ export const metroService = {
     userLat: number,
     userLng: number,
     queryText: string = '',
-    limit: number = 10
+    limit: number = 5,
+    maxDistanceKm: number = 50          // only include stations within this radius
   ): MetroStation[] => {
     // 1. Filter by query if user is typing
     let filtered = METRO_STATIONS_DATABASE;
@@ -108,10 +109,13 @@ export const metroService = {
       };
     });
 
-    // 3. Sort ascending by distance (nearest metro first, then next closest, etc.)
+    // 3. Sort ascending by distance (nearest first)
     withDistance.sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
 
-    return withDistance.slice(0, limit);
+    // 4. Only return stations within maxDistanceKm radius
+    const nearby = withDistance.filter(st => (st.distanceKm || 0) <= maxDistanceKm);
+
+    return nearby.slice(0, limit);
   },
 
   /**
