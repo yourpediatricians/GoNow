@@ -16,6 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RiderStackParamList, RideType, PaymentMethod } from '../../types';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { useRideStore } from '../../store/rideStore';
+import { walletService } from '../../services/wallet.service';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'Booking'>;
 
@@ -44,7 +45,6 @@ const RIDE_OPTIONS = [
 const PAYMENT_METHODS = [
   { id: 'cash', icon: '💵', label: 'Cash' },
   { id: 'upi', icon: '📱', label: 'UPI' },
-  { id: 'wallet', icon: '👛', label: 'Wallet  ₹240' },
 ];
 
 export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -53,6 +53,8 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   );
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [isBooking, setIsBooking] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useWallet, setUseWallet] = useState(false);
   const slideAnim = useRef(new Animated.Value(height)).current;
 
   const {
@@ -63,6 +65,13 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     isLoading,
     error,
   } = useRideStore();
+
+  // Fetch wallet balance on mount
+  useEffect(() => {
+    walletService.getBalance().then(res => {
+      setWalletBalance(res.data?.balance || 0);
+    }).catch(() => {});
+  }, []);
 
   // Hydrate store on mount if params are passed
   useEffect(() => {
@@ -90,7 +99,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
           const msg = err?.response?.data?.message || err?.message || 'Failed to calculate estimate';
           Alert.alert('Route Unavailable', msg);
         });
-      }, 300); // 300ms debounce
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [pickup?.latitude, pickup?.longitude, dropoff?.latitude, dropoff?.longitude]);
@@ -115,7 +124,6 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     }
     setIsBooking(true);
     try {
-      // Refetch the estimate immediately to get the freshest captain availability
       await fetchEstimate();
       
       const freshCaptains = useRideStore.getState().availableCaptainsMap[selectedRide] || 0;
@@ -126,6 +134,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
       }
 
       setPaymentMethod(selectedPayment);
+      // Store useWallet flag in store before requesting
+      if ((useRideStore.getState() as any).setUseWallet) {
+        (useRideStore.getState() as any).setUseWallet(useWallet);
+      }
       const rideId = await requestRide();
       if (rideId) {
         navigation.navigate('RideSearch', { rideId });
@@ -142,6 +154,10 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
   const displayDistance = estimatedDistance || 0;
   const displayDuration = estimatedDurations[selectedRide];
 
+  // Wallet payment split
+  const walletDeduction = useWallet ? Math.min(walletBalance, displayFare || 0) : 0;
+  const cashToPay = (displayFare || 0) - walletDeduction;
+
   const mapPickup = pickup ? {
     coordinates: [pickup.longitude, pickup.latitude] as [number, number],
     address: pickup.address,
@@ -151,6 +167,17 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
     coordinates: [dropoff.longitude, dropoff.latitude] as [number, number],
     address: dropoff.address,
   } : null;
+
+  const bookBtnLabel = (() => {
+    if (isBooking) return 'Booking...';
+    if (!pickup) return 'Select Pickup Location';
+    if (!!error) return 'Route Unavailable';
+    if (isLoading) return 'Calculating...';
+    if (useWallet && walletDeduction > 0) {
+      return `Book ${selected.icon} · ₹${cashToPay} Cash + ₹${walletDeduction} Wallet`;
+    }
+    return `Book ${selected.icon} · ₹${displayFare}`;
+  })();
 
   return (
     <View style={styles.container}>
@@ -170,7 +197,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {/* Bottom Sheet */}
       <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-      {/* Route summary */}
+        {/* Route summary */}
         <View style={styles.routeCard}>
           <TouchableOpacity style={styles.routeRow} onPress={() => handleEditLocation('pickup')} activeOpacity={0.7}>
             <View style={styles.routeDotPickup} />
@@ -254,7 +281,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             );
           })}
         </ScrollView>
- 
+
         {/* Payment selector */}
         <Text style={styles.sectionLabel}>Payment</Text>
         <View style={styles.paymentRow}>
@@ -273,6 +300,31 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* GoNow Wallet Toggle */}
+        {walletBalance > 0 && (
+          <TouchableOpacity
+            style={[styles.walletToggleRow, useWallet && styles.walletToggleActive]}
+            onPress={() => setUseWallet(v => !v)}
+            activeOpacity={0.8}>
+            <View style={styles.walletToggleLeft}>
+              <Text style={styles.walletIcon}>👛</Text>
+              <View>
+                <Text style={styles.walletToggleLabel}>Use GoNow Balance</Text>
+                <Text style={styles.walletBalance}>₹{walletBalance} available</Text>
+              </View>
+            </View>
+            <View style={[styles.walletCheckbox, useWallet && styles.walletCheckboxChecked]}>
+              {useWallet && <Text style={styles.walletCheckmark}>✓</Text>}
+            </View>
+          </TouchableOpacity>
+        )}
+        {useWallet && walletDeduction > 0 && (
+          <View style={styles.walletBreakdown}>
+            <Text style={styles.walletBreakdownText}>👛 Wallet: -₹{walletDeduction}</Text>
+            <Text style={styles.walletBreakdownText}>💵 Cash: ₹{cashToPay}</Text>
+          </View>
+        )}
 
         {cancellationFee > 0 && (
           <View style={styles.cancellationWarning}>
@@ -294,7 +346,7 @@ export const BookingScreen: React.FC<Props> = ({ navigation, route }) => {
             end={{ x: 1, y: 0 }}
             style={styles.bookBtnGrad}>
             <Text style={[styles.bookBtnText, (!pickup || !!error || isLoading) && { color: Colors.textMuted }]}>
-              {isBooking ? 'Booking...' : !pickup ? 'Select Pickup Location' : !!error ? 'Route Unavailable' : isLoading ? 'Calculating...' : `Book ${selected.icon} · ₹${displayFare}`}
+              {bookBtnLabel}
             </Text>
             {pickup && !error && !isLoading && <Text style={styles.bookBtnArrow}>→</Text>}
           </LinearGradient>
@@ -369,7 +421,7 @@ const styles = StyleSheet.create({
   rideSurge: { fontSize: FontSize.xs, color: Colors.textMuted, textDecorationLine: 'line-through' },
   ridePrice: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   rideEta: { fontSize: FontSize.xs, color: Colors.success },
-  paymentRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  paymentRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
   payChip: {
     flex: 1,
     flexDirection: 'row',
@@ -386,6 +438,30 @@ const styles = StyleSheet.create({
   payChipIcon: { fontSize: 16 },
   payChipLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   payChipLabelActive: { color: Colors.primary },
+  walletToggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.md,
+    padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
+    marginBottom: Spacing.sm,
+  },
+  walletToggleActive: { borderColor: Colors.success, backgroundColor: 'rgba(34,197,94,0.08)' },
+  walletToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  walletIcon: { fontSize: 22 },
+  walletToggleLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textPrimary },
+  walletBalance: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  walletCheckbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+    borderColor: Colors.surfaceBorder, alignItems: 'center', justifyContent: 'center',
+  },
+  walletCheckboxChecked: { backgroundColor: Colors.success, borderColor: Colors.success },
+  walletCheckmark: { color: Colors.white, fontSize: 13, fontWeight: FontWeight.black },
+  walletBreakdown: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  walletBreakdownText: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semiBold },
   bookBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden' },
   bookBtnGrad: {
     flexDirection: 'row',

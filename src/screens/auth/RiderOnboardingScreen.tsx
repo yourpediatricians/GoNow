@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  ToastAndroid,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
@@ -20,6 +21,8 @@ import { useAuthStore } from '../../store/authStore';
 
 export const RiderOnboardingScreen: React.FC = () => {
   const [name, setName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [showReferral, setShowReferral] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const logout = useAuthStore((state) => state.logout);
 
@@ -35,10 +38,25 @@ export const RiderOnboardingScreen: React.FC = () => {
       return;
     }
 
+    const trimmedCode = referralCode.trim().toUpperCase();
+    if (trimmedCode && trimmedCode.startsWith('GNC')) {
+      const msg = 'Riders cannot use captain referral codes (starting with GNC).';
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(msg, ToastAndroid.LONG);
+      }
+      Alert.alert('Invalid Referral Code', msg);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // 1. Save name to backend database
-      await userService.updateProfile({ name: trimmedName });
+      const profilePayload: any = { name: trimmedName };
+      if (trimmedCode) {
+        profilePayload.referralCode = trimmedCode;
+      }
+
+      // 1. Save name (+ optional referralCode) to backend
+      await userService.updateProfile(profilePayload);
 
       // 2. Update in-memory auth store so RootNavigator redirects to RiderNavigator
       useAuthStore.getState().updateProfile({ name: trimmedName });
@@ -58,10 +76,11 @@ export const RiderOnboardingScreen: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Rider name update error:', err);
-      Alert.alert(
-        'Setup Failed',
-        err?.response?.data?.message || err?.message || 'Could not save profile. Please check connection.'
-      );
+      const msg = err?.response?.data?.message || err?.message || 'Could not save profile. Please check connection.';
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(msg, ToastAndroid.LONG);
+      }
+      Alert.alert('Setup Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -125,6 +144,36 @@ export const RiderOnboardingScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Optional referral code */}
+        <TouchableOpacity
+          style={s.referralToggle}
+          onPress={() => setShowReferral(v => !v)}
+          activeOpacity={0.7}>
+          <Text style={s.referralToggleText}>
+            {showReferral ? '▼' : '▶'} Have a referral code? (Optional)
+          </Text>
+        </TouchableOpacity>
+
+        {showReferral && (
+          <View style={[s.card, { marginTop: 0 }]}>
+            <Text style={s.label}>Referral Code</Text>
+            <View style={s.inputContainer}>
+              <TextInput
+                style={[s.input, s.referralInput]}
+                placeholder="e.g. GNR8F6A0C"
+                placeholderTextColor={Colors.textMuted}
+                value={referralCode}
+                onChangeText={(v) => setReferralCode(v.toUpperCase())}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={12}
+                editable={!isSubmitting}
+              />
+            </View>
+            <Text style={s.referralHint}>🎁 Get ₹25 in your wallet on signup</Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={s.btn}
           onPress={handleSubmit}
@@ -161,7 +210,6 @@ const s = StyleSheet.create({
     height: 350,
     borderRadius: 175,
     backgroundColor: 'rgba(255, 90, 31, 0.1)',
-    blurRadius: 100,
     zIndex: -1,
   },
   header: {
@@ -269,5 +317,24 @@ const s = StyleSheet.create({
     fontSize: FontSize.base,
     fontWeight: FontWeight.bold,
     color: Colors.white,
+  },
+  referralToggle: {
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.sm,
+    paddingVertical: 4,
+  },
+  referralToggleText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: FontWeight.medium,
+  },
+  referralInput: {
+    letterSpacing: 3,
+    fontWeight: FontWeight.bold,
+  },
+  referralHint: {
+    fontSize: FontSize.xs,
+    color: Colors.success,
+    marginTop: Spacing.xs,
   },
 });

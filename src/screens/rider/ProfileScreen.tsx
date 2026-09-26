@@ -19,6 +19,10 @@ const MENU_ITEMS = [
     { label: 'Edit Profile', route: 'EditProfile', arrow: true },
     { label: 'Saved Addresses', route: 'SavedAddresses', arrow: true },
   ]},
+  { section: 'Rewards', items: [
+    { label: '🎁 Refer & Earn', route: 'Referral', arrow: true },
+    { label: '👛 My Wallet', route: 'Wallet', arrow: true },
+  ]},
   { section: 'Support', items: [
     { label: 'Safety', route: 'Support', params: { activeTab: 'safety' }, arrow: true },
     { label: 'Help & Support', route: 'Support', params: { activeTab: 'help' }, arrow: true },

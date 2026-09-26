@@ -105,6 +105,10 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
       },
       rideType: rideObj.rideType || 'bike',
       fare: rideObj.fare?.actual || rideObj.fare?.estimated || 0,
+      walletAmountUsed: rideObj.walletAmountUsed || 0,
+      cashAmountToCollect: rideObj.cashAmountToCollect !== undefined
+        ? rideObj.cashAmountToCollect
+        : Math.max(0, (rideObj.fare?.actual || rideObj.fare?.estimated || 0) - (rideObj.walletAmountUsed || 0)),
       distance: rideObj.distance || 0,
       duration: rideObj.actualDuration || rideObj.estimatedDuration || 0,
       status: rideObj.status,
@@ -174,9 +178,11 @@ export const ActiveRideScreen: React.FC<any> = ({ navigation, route }) => {
               ...finalRide,
               _id: rideId,
               status: 'completed',
-              fare: finalRide.fare || { actual: data.fare || 0 },
-              distance: finalRide.distance || data.distance || 0,
-              actualDuration: finalRide.actualDuration || data.duration || 0,
+              fare: finalRide.fare || { actual: data?.fare || 0 },
+              walletAmountUsed: data?.walletAmountUsed !== undefined ? data.walletAmountUsed : finalRide.walletAmountUsed,
+              cashAmountToCollect: data?.cashAmountToCollect !== undefined ? data.cashAmountToCollect : finalRide.cashAmountToCollect,
+              distance: finalRide.distance || data?.distance || 0,
+              actualDuration: finalRide.actualDuration || data?.duration || 0,
             });
           });
         });

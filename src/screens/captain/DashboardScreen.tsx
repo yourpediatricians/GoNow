@@ -694,7 +694,16 @@ export const CaptainDashboardScreen: React.FC = () => {
     try {
       const res = await rideService.completeRide(activeRideId);
       if (res.success) {
-        Alert.alert('Ride Completed', `Earning of ₹${res.data?.fare || activeRideDetails?.fare?.estimated} added!`);
+        const cashToCollect = res.data?.cashAmountToCollect !== undefined
+          ? res.data.cashAmountToCollect
+          : (res.data?.fare || activeRideDetails?.fare?.estimated || 0);
+        const walletUsed = res.data?.walletAmountUsed || 0;
+
+        const message = walletUsed > 0
+          ? `Collect from Rider: ₹${cashToCollect} (Cash / UPI)\n\n₹${walletUsed} was paid via GoNow Wallet and credited to your digital balance.`
+          : `Collect from Rider: ₹${cashToCollect} (Cash / UPI)`;
+
+        Alert.alert('Ride Completed', message);
         setActiveRideId(null);
         setActiveRideDetails(null);
         fetchEarnings();
@@ -705,7 +714,16 @@ export const CaptainDashboardScreen: React.FC = () => {
       try {
         const res = await rideService.getRideById(activeRideId);
         if (res.success && res.data && (res.data.ride?.status === 'completed' || res.data.ride?.status === 'cancelled')) {
-          Alert.alert('Ride Completed', `Earning of ₹${res.data.ride.fare?.actual || activeRideDetails?.fare?.estimated} added (recovered)!`);
+          const cashToCollect = res.data.ride.cashAmountToCollect !== undefined
+            ? res.data.ride.cashAmountToCollect
+            : (res.data.ride.fare?.actual || activeRideDetails?.fare?.estimated || 0);
+          const walletUsed = res.data.ride.walletAmountUsed || 0;
+
+          const message = walletUsed > 0
+            ? `Collect from Rider: ₹${cashToCollect} (Cash / UPI)\n\n₹${walletUsed} was paid via GoNow Wallet and credited to your digital balance.`
+            : `Collect from Rider: ₹${cashToCollect} (Cash / UPI)`;
+
+          Alert.alert('Ride Completed', message);
           setActiveRideId(null);
           setActiveRideDetails(null);
           fetchEarnings();
@@ -840,7 +858,16 @@ export const CaptainDashboardScreen: React.FC = () => {
     try {
       const res = await rideService.completeRide(rideId);
       if (res.success) {
-        Alert.alert('Success', 'Rider\'s ride completed successfully!');
+        const cashToCollect = res.data?.cashAmountToCollect !== undefined
+          ? res.data.cashAmountToCollect
+          : (res.data?.fare || 0);
+        const walletUsed = res.data?.walletAmountUsed || 0;
+
+        const message = walletUsed > 0
+          ? `Collect from Rider: ₹${cashToCollect} (Cash / UPI)\n\n₹${walletUsed} was paid via GoNow Wallet and credited to your digital balance.`
+          : `Collect from Rider: ₹${cashToCollect} (Cash / UPI)`;
+
+        Alert.alert('Ride Completed', message);
         
         // Refresh pool and check if all rides are completed
         const poolData = await fetchActivePool();

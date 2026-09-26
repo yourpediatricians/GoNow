@@ -28,6 +28,7 @@ interface RideState {
 
   // Payment
   paymentMethod: PaymentMethod;
+  useWallet: boolean;
 
   // History
   rideHistory: RideHistory[];
@@ -45,6 +46,7 @@ interface RideState {
   setActiveRide: (ride: ActiveRide | null) => void;
   setCaptain: (captain: CaptainInfo | null) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  setUseWallet: (use: boolean) => void;
   addToHistory: (ride: RideHistory) => void;
   resetRide: () => void;
 
@@ -74,6 +76,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   rideOtp: null,
   captain: null,
   paymentMethod: 'cash',
+  useWallet: false,
   rideHistory: [],
   isLoading: false,
   error: null,
@@ -95,6 +98,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   setActiveRide: (activeRide) => set({ activeRide }),
   setCaptain: (captain) => set({ captain }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+  setUseWallet: (useWallet) => set({ useWallet }),
   addToHistory: (ride) => set((state) => ({ rideHistory: [ride, ...state.rideHistory] })),
 
   resetRide: () =>
@@ -193,7 +197,7 @@ export const useRideStore = create<RideState>((set, get) => ({
    * Request a ride — stores the rideId and OTP, updates status to 'searching'.
    */
   requestRide: async () => {
-    const { pickup, dropoff, selectedRideType, paymentMethod } = get();
+    const { pickup, dropoff, selectedRideType, paymentMethod, useWallet } = get();
     if (!pickup || !dropoff || !selectedRideType) return null;
 
     set({ isLoading: true, error: null });
@@ -202,7 +206,8 @@ export const useRideStore = create<RideState>((set, get) => ({
         { latitude: pickup.latitude, longitude: pickup.longitude, address: pickup.address, name: pickup.name },
         { latitude: dropoff.latitude, longitude: dropoff.longitude, address: dropoff.address, name: dropoff.name },
         selectedRideType,
-        paymentMethod
+        paymentMethod,
+        useWallet
       );
       const rideId = result.data.ride._id;
       set({

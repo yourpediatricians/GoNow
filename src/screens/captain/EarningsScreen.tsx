@@ -6,6 +6,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 import { useCaptainStore } from '../../store/captainStore';
+import { walletService } from '../../services/wallet.service';
 
 const { width } = Dimensions.get('window');
 
@@ -28,8 +29,14 @@ export const CaptainEarningsScreen: React.FC = () => {
     totalRides, completedRides, cancelledRides, acceptedRides
   } = useCaptainStore();
 
+  const [walletBal, setWalletBal] = useState(0);
+
   useEffect(() => {
     fetchEarnings();
+  }, []);
+
+  useEffect(() => {
+    walletService.getBalance().then(res => setWalletBal(res.data?.balance || 0)).catch(() => {});
   }, []);
 
   const chartData = (weeklyEarnings.length > 0 ? weeklyEarnings : WEEKLY_DATA)
@@ -94,6 +101,19 @@ export const CaptainEarningsScreen: React.FC = () => {
             </View>
           </LinearGradient>
         </LinearGradient>
+
+        {/* Digital Settlement Balance */}
+        <View style={s.settlementCard}>
+          <View style={s.settlementHeader}>
+            <Text style={s.settlementTitle}>GoNow Wallet / Settleable Balance</Text>
+            <Text style={s.settlementBadge}>Weekly Settlement</Text>
+          </View>
+          <Text style={s.settlementAmount}>₹{walletBal.toLocaleString()}</Text>
+          <Text style={s.settlementNote}>
+            This balance includes referral earnings + wallet portions from rides.{' '}
+            Cleared to your registered bank account every Monday.
+          </Text>
+        </View>
 
         {/* Weekly chart */}
         <View style={s.section}>
@@ -224,4 +244,23 @@ const s = StyleSheet.create({
   cancelledVal: {
     color: Colors.error,
   },
+  settlementCard: {
+    marginHorizontal: Spacing.xl,
+    marginTop: Spacing.lg,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.3)',
+    gap: Spacing.sm,
+  },
+  settlementHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  settlementTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, flex: 1 },
+  settlementBadge: {
+    fontSize: 10, fontWeight: FontWeight.bold, color: Colors.success,
+    backgroundColor: 'rgba(34,197,94,0.12)', paddingHorizontal: 8,
+    paddingVertical: 2, borderRadius: 10,
+  },
+  settlementAmount: { fontSize: FontSize['3xl'], fontWeight: FontWeight.black, color: Colors.success },
+  settlementNote: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 18 },
 });

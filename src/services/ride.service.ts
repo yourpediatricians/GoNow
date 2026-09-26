@@ -25,11 +25,12 @@ export const rideService = {
     pickup: LocationPayload,
     dropoff: LocationPayload,
     rideType: RideType,
-    paymentMethod: PaymentMethod = 'cash'
+    paymentMethod: PaymentMethod = 'cash',
+    useWallet: boolean = false
   ) => {
-    const { data } = await api.post('/rides/request', { pickup, dropoff, rideType, paymentMethod });
+    const { data } = await api.post('/rides/request', { pickup, dropoff, rideType, paymentMethod, useWallet });
     return data;
-    // Returns: { ride: { _id, otp, fare, distance, estimatedDuration }, captainsNotified }
+    // Returns: { ride: { _id, otp, fare, walletAmountUsed, cashAmountToCollect, distance, estimatedDuration }, captainsNotified }
   },
 
   /**

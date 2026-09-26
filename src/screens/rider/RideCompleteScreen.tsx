@@ -94,6 +94,18 @@ export const RideCompleteScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={s.fareLabel}>Total Fare</Text>
               <Text style={s.fareValue}>₹{ride.fare}</Text>
             </View>
+            {ride.walletAmountUsed > 0 && (
+              <View style={s.walletBreakdownBox}>
+                <View style={s.walletBreakdownRow}>
+                  <Text style={s.walletBreakdownLabel}>👛 Paid via Wallet</Text>
+                  <Text style={s.walletBreakdownValue}>-₹{ride.walletAmountUsed}</Text>
+                </View>
+                <View style={s.walletBreakdownRow}>
+                  <Text style={s.walletBreakdownLabel}>💵 Cash / UPI</Text>
+                  <Text style={s.walletBreakdownValue}>₹{ride.cashAmountToCollect ?? (ride.fare - ride.walletAmountUsed)}</Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Rate captain */}
@@ -207,4 +219,16 @@ const s = StyleSheet.create({
   doneBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden', marginTop: Spacing.sm },
   doneBtnGrad: { paddingVertical: Spacing.lg, alignItems: 'center', justifyContent: 'center', ...Shadow.glow },
   doneBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
+  walletBreakdownBox: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  walletBreakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  walletBreakdownLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
+  walletBreakdownValue: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.success },
 });
