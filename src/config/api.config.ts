@@ -10,8 +10,8 @@
  */
 
 // ── Dev (local backend) ────────────────────────────────────────────────────────
-// const DEV_BASE_URL = 'http://10.17.2.38:5000/api';
-// const DEV_SOCKET_URL = 'http://10.17.2.38:5000';
+// const DEV_BASE_URL = 'http://10.154.134.38:5000/api';
+// const DEV_SOCKET_URL = 'http://10.154.134.38:5000';
 const DEV_BASE_URL = 'https://gonow-backend.onrender.com/api';
 const DEV_SOCKET_URL = 'https://gonow-backend.onrender.com';
 

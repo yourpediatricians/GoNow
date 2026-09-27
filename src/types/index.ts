@@ -169,6 +169,8 @@ export type RiderStackParamList = {
   SavedAddresses: undefined;
   EditProfile: undefined;
   Support: undefined;
+  Referral: undefined;
+  Wallet: undefined;
 };
 
 export type CaptainTabParamList = {

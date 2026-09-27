@@ -52,20 +52,20 @@ export const ReferralScreen: React.FC = () => {
 
   useEffect(() => { load(); }, []);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!data) return;
-    try {
-      // Use Clipboard API if available, otherwise show alert with code
-      const Clipboard = require('@react-native-clipboard/clipboard').default;
-      Clipboard.setString(data.referralCode);
-    } catch {
-      // Clipboard not available, fallback
-    }
     setCopied(true);
     if (Platform.OS === 'android') {
-      ToastAndroid.show(`Code ${data.referralCode} copied to clipboard!`, ToastAndroid.SHORT);
+      ToastAndroid.show(`Referral Code: ${data.referralCode}`, ToastAndroid.SHORT);
     }
-    Alert.alert('Copied!', `Code ${data?.referralCode} copied to clipboard.`);
+    Alert.alert(
+      'Referral Code',
+      `Your code is: ${data.referralCode}\n\nShare this code with your friends to earn rewards!`,
+      [
+        { text: 'Share Now', onPress: handleShare },
+        { text: 'OK', style: 'cancel' },
+      ]
+    );
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -283,3 +283,5 @@ const s = StyleSheet.create({
   applyBtnGrad: { paddingVertical: Spacing.md, alignItems: 'center' },
   applyBtnText: { color: Colors.white, fontWeight: FontWeight.bold, fontSize: FontSize.base },
 });
+
+export default ReferralScreen;

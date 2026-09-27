@@ -34,6 +34,8 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
+  const [referralCode, setReferralCode] = useState('');
+  const [showReferral, setShowReferral] = useState(false);
 
   // Vehicle details
   const [vehicleType, setVehicleType] = useState('');
@@ -96,7 +98,8 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
           drivingLicense: licenceNo.trim().toUpperCase(),
           rcBook: rcNo.trim().toUpperCase(),
           insurance: insuranceNo.trim() ? insuranceNo.trim().toUpperCase() : undefined,
-        }
+        },
+        referralCode: referralCode.trim() ? referralCode.trim().toUpperCase() : undefined,
       });
       
       // Cache response user in a local variable or store
@@ -231,6 +234,32 @@ export const CaptainOnboardingScreen: React.FC<any> = ({ navigation }) => {
           ))}
         </View>
       </View>
+
+      {/* Referral Code (Optional) */}
+      <TouchableOpacity
+        style={s.referralToggle}
+        onPress={() => setShowReferral(v => !v)}
+        activeOpacity={0.7}>
+        <Text style={s.referralToggleText}>
+          {showReferral ? '▼' : '▶'} Have a referral code? (Optional)
+        </Text>
+      </TouchableOpacity>
+
+      {showReferral && (
+        <View style={s.field}>
+          <Text style={s.label}>Captain Referral Code</Text>
+          <TextInput
+            style={[s.input, s.referralInput]}
+            placeholder="e.g. GNC12345"
+            placeholderTextColor={Colors.textMuted}
+            value={referralCode}
+            onChangeText={(v) => setReferralCode(v.toUpperCase())}
+            autoCapitalize="characters"
+            maxLength={12}
+          />
+          <Text style={s.referralHint}>Enter a referral code to get a ₹50 welcome bonus credited to your redeem wallet</Text>
+        </View>
+      )}
 
       <TouchableOpacity style={s.nextBtn} onPress={handlePersonalNext} activeOpacity={0.9}>
         <LinearGradient colors={[Colors.primaryLight, Colors.primary, Colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.nextBtnGrad}>
@@ -538,4 +567,24 @@ const s = StyleSheet.create({
   doneCardTitle: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
   doneCardDesc: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
   goLiveBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden', width: '100%' },
+
+  // Referral
+  referralToggle: {
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  referralToggleText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: FontWeight.semiBold,
+  },
+  referralInput: {
+    letterSpacing: 2,
+    fontWeight: FontWeight.bold,
+  },
+  referralHint: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
 });
