@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from '@react-native-community/geolocation';
 import { DummyMap } from '../../components/DummyMap';
 import LinearGradient from 'react-native-linear-gradient';
@@ -26,6 +27,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { rideService } from '../../services/ride.service';
 import { poolService } from '../../services/pool.service';
 import { metroService } from '../../services/metro.service';
+import { OnboardingSetupModal } from '../../components/OnboardingSetupModal';
 
 type Props = NativeStackScreenProps<RiderStackParamList, 'RiderTabs'> & { navigation: any };
 
@@ -78,8 +80,19 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
   const mapRef = useRef<any>(null);
 
   const [activePoolId, setActivePoolId] = useState<string | null>(null);
+  const [showSetupModal, setShowSetupModal] = useState(false);
   const isFocused = useIsFocused();
   const hasAutoRedirected = useRef(false);
+
+  // ── Show onboarding setup modal if user has no commuteTimings in DB ─────────
+  useEffect(() => {
+    if (user?.id && user?.role === 'rider' && !user?.commuteTimings) {
+      const timer = setTimeout(() => setShowSetupModal(true), 800);
+      return () => clearTimeout(timer);
+    } else {
+      setShowSetupModal(false);
+    }
+  }, [user?.id, user?.commuteTimings, user?.role]);
 
   useEffect(() => {
     const checkActiveTrip = async () => {
@@ -436,8 +449,6 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
         </View>
       </View>
 
-
-
       {/* Bottom Panel */}
       <View style={styles.bottomPanel}>
         {renderActiveRideBanner()}
@@ -493,7 +504,14 @@ export const RiderHomeScreen: React.FC<any> = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
-        </View>      </View>
+        </View>
+      </View>
+
+      {/* First-time onboarding setup modal */}
+      <OnboardingSetupModal
+        visible={showSetupModal}
+        onClose={() => setShowSetupModal(false)}
+      />
     </View>
   );
 };

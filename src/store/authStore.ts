@@ -55,9 +55,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
 
   updateProfile: (updates) =>
-    set((state) => ({
-      user: state.user ? { ...state.user, ...updates } : null,
-    })),
+    set((state) => {
+      const updatedUser = state.user ? { ...state.user, ...updates } : null;
+      if (updatedUser) {
+        AsyncStorage.getItem(STORAGE_KEYS.USER).then((stored) => {
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            AsyncStorage.setItem(
+              STORAGE_KEYS.USER,
+              JSON.stringify({ ...parsed, ...updates })
+            ).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+      return { user: updatedUser };
+    }),
 
   /**
    * Request Firebase Phone Auth SMS.
@@ -166,6 +178,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         rating: user.rating || 0.0,
         totalRides: user.totalRides || 0,
         savedAddresses: user.savedAddresses || [],
+        commuteTimings: user.commuteTimings || undefined,
         isDocumentVerified: user.isDocumentVerified || false,
         email: user.email || '',
         gender: user.gender || '',
@@ -218,6 +231,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           rating: user.rating || 5.0,
           totalRides: user.totalRides || 0,
           savedAddresses: user.savedAddresses || [],
+          commuteTimings: user.commuteTimings || undefined,
           isDocumentVerified: user.isDocumentVerified || false,
           email: user.email || '',
           gender: user.gender || '',

@@ -9,6 +9,11 @@ export interface SavedAddress {
   longitude?: number;
 }
 
+export interface CommuteTimings {
+  morningDeparture?: string; // e.g. "8:00 AM"
+  eveningDeparture?: string; // e.g. "6:30 PM"
+}
+
 export interface User {
   id: string;
   name: string;
@@ -22,6 +27,7 @@ export interface User {
   dob?: string;
   memberSince?: string;
   savedAddresses?: SavedAddress[];
+  commuteTimings?: CommuteTimings;
   vehicle?: Vehicle;
   isDocumentVerified?: boolean;
 }
