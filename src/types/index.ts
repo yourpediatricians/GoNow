@@ -173,6 +173,7 @@ export type RiderStackParamList = {
   };
   EconomyMatching: { poolId: string };
   SavedAddresses: undefined;
+  SavedTimings: undefined;
   EditProfile: undefined;
   Support: undefined;
   Referral: undefined;

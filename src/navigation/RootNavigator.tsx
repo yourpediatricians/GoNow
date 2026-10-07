@@ -25,6 +25,7 @@ import { EconomyBookingScreen } from '../screens/rider/EconomyBookingScreen';
 import { EconomyMatchingScreen } from '../screens/rider/EconomyMatchingScreen';
 import { EditProfileScreen } from '../screens/rider/EditProfileScreen';
 import { SavedAddressesScreen } from '../screens/rider/SavedAddressesScreen';
+import { SavedTimingsScreen } from '../screens/rider/SavedTimingsScreen';
 import { SupportScreen } from '../screens/rider/SupportScreen';
 import { ReferralScreen } from '../screens/rider/ReferralScreen';
 import { WalletScreen } from '../screens/rider/WalletScreen';
@@ -174,6 +175,7 @@ export const RootNavigator = () => {
         )}
         <RootStack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
         <RootStack.Screen name="SavedAddresses" component={SavedAddressesScreen} options={{ animation: 'slide_from_right' }} />
+        <RootStack.Screen name="SavedTimings" component={SavedTimingsScreen} options={{ animation: 'slide_from_right' }} />
         <RootStack.Screen name="Support" component={SupportScreen} options={{ animation: 'slide_from_right' }} />
         <RootStack.Screen name="Referral" component={ReferralScreen} options={{ animation: 'slide_from_right' }} />
         <RootStack.Screen name="Wallet" component={WalletScreen} options={{ animation: 'slide_from_right' }} />

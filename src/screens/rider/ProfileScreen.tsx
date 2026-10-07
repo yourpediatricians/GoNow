@@ -18,6 +18,7 @@ const MENU_ITEMS = [
   { section: 'Account', items: [
     { label: 'Edit Profile', route: 'EditProfile', arrow: true },
     { label: 'Saved Addresses', route: 'SavedAddresses', arrow: true },
+    { label: '⏰ Saved Timings', route: 'SavedTimings', arrow: true },
   ]},
   { section: 'Rewards', items: [
     { label: '🎁 Refer & Earn', route: 'Referral', arrow: true },
@@ -46,7 +47,7 @@ export const ProfileScreen: React.FC = () => {
     if (section.section === 'Account' && user?.role === 'captain') {
       return {
         ...section,
-        items: section.items.filter(item => item.route !== 'SavedAddresses')
+        items: section.items.filter(item => item.route !== 'SavedAddresses' && item.route !== 'SavedTimings')
       };
     }
     return section;
